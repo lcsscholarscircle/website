@@ -70,13 +70,13 @@ export default function AvailabilityPage() {
   const [zoomDialogOpen, setZoomDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  const [zoomDay, setZoomDay] = useState('')
-  const [zoomStart, setZoomStart] = useState('')
-  const [zoomEnd, setZoomEnd] = useState('')
-  const [zoomStartDate, setZoomStartDate] = useState('')
-  const [zoomEndDate, setZoomEndDate] = useState('')
+  const [zoomDay, setZoomDay] = useState<string | null>(null)
+  const [zoomStart, setZoomStart] = useState<string | null>(null)
+  const [zoomEnd, setZoomEnd] = useState<string | null>(null)
+  const [zoomStartDate, setZoomStartDate] = useState<string | null>(null)
+  const [zoomEndDate, setZoomEndDate] = useState<string | null>(null)
 
-  const [error, setError] = useState('')
+  const [error, setError] = useState<string | null>(null)
 
   async function loadData() {
     const {
