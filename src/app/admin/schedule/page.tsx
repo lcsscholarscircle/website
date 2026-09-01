@@ -373,7 +373,7 @@ export default function SchedulePage() {
 
               <Select
                 value={day}
-                onValueChange={setDay}
+                onValueChange={(value) => setDay(value ?? '')}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a day" />
@@ -398,7 +398,7 @@ export default function SchedulePage() {
 
                 <Select
                   value={startTime}
-                  onValueChange={setStartTime}
+                  onValueChange={(value) => setStartTime(value ?? '')}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Start" />
@@ -422,7 +422,7 @@ export default function SchedulePage() {
 
                 <Select
                   value={endTime}
-                  onValueChange={setEndTime}
+                  onValueChange={(value) => setEndTime(value ?? '')}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="End" />

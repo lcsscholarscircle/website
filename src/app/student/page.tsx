@@ -163,7 +163,17 @@ export default function StudentDashboard() {
     }
 
     setBookings(
-      bookingData || []
+      (bookingData ?? [])
+        .filter(
+          (booking) =>
+            booking.bookable_sessions?.[0] &&
+            booking.tutor?.[0]
+        )
+        .map((booking) => ({
+          ...booking,
+          bookable_sessions: booking.bookable_sessions[0],
+          tutor: booking.tutor[0],
+        }))
     )
 
     setSubjects(

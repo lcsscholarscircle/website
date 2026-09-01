@@ -420,7 +420,7 @@ export default function AvailabilityPage() {
 
               <Select
                 value={zoomDay}
-                onValueChange={setZoomDay}
+                onValueChange={(value) => setZoomDay(value ?? '')}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a day" />
@@ -445,7 +445,7 @@ export default function AvailabilityPage() {
 
                 <Select
                   value={zoomStart}
-                  onValueChange={setZoomStart}
+                  onValueChange={(value) => setZoomStart(value ?? '')}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Start" />
@@ -469,7 +469,7 @@ export default function AvailabilityPage() {
 
                 <Select
                   value={zoomEnd}
-                  onValueChange={setZoomEnd}
+                  onValueChange={(value) => setZoomEnd(value ?? '')}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="End" />
@@ -495,7 +495,7 @@ export default function AvailabilityPage() {
 
                 <Input
                   type="date"
-                  value={zoomStartDate}
+                  value={zoomStartDate ?? ''}
                   onChange={(e) =>
                     setZoomStartDate(e.target.value)
                   }
@@ -507,7 +507,7 @@ export default function AvailabilityPage() {
 
                 <Input
                   type="date"
-                  value={zoomEndDate}
+                  value={zoomEndDate ?? ''}
                   onChange={(e) =>
                     setZoomEndDate(e.target.value)
                   }
