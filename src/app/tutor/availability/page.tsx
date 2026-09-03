@@ -175,7 +175,7 @@ export default function AvailabilityPage() {
         alert(error.message)
         return
       }
-      
+
       await fetch('/api/generate-sessions', {
         method: 'POST',
       })
@@ -254,6 +254,10 @@ export default function AvailabilityPage() {
       setSaving(false)
       return
     }
+
+    await fetch('/api/generate-sessions', {
+      method: 'POST',
+    })
 
     setSaving(false)
     setZoomDialogOpen(false)
