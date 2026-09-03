@@ -175,6 +175,10 @@ export default function AvailabilityPage() {
         alert(error.message)
         return
       }
+      
+      await fetch('/api/generate-sessions', {
+        method: 'POST',
+      })
     }
 
     await loadData()
