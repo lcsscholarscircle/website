@@ -11,6 +11,7 @@ type Booking = {
   session_id: string
   student_id: string
   tutor_id: string
+  status: string
   bookable_sessions: {
     id: string
     session_type: 'lunch' | 'zoom' | 'official'
@@ -125,6 +126,7 @@ export default function StudentDashboard() {
         session_id,
         student_id,
         tutor_id,
+        status,
 
         bookable_sessions (
           id,
@@ -140,27 +142,21 @@ export default function StudentDashboard() {
           grade
         )
       `)
-      .eq(
-        'student_id',
-        user.id
-      )
-      .order(
-        'id',
-        {
-          ascending: false,
-        }
-      )
+      .eq('student_id', user.id)
 
     if (bookingsError) {
-      console.error(bookingsError)
+      console.error('BOOKINGS ERROR:', bookingsError)
 
       setError(
-        bookingsError.message
+        bookingsError.message ||
+          'Unable to load your bookings.'
       )
 
       setLoading(false)
       return
     }
+
+    console.log('BOOKINGS:', bookingData)
 
     setBookings(
       (bookingData ?? [])
@@ -171,8 +167,10 @@ export default function StudentDashboard() {
         )
         .map((booking) => ({
           ...booking,
-          bookable_sessions: booking.bookable_sessions[0],
-          tutor: booking.tutor[0],
+          bookable_sessions:
+            booking.bookable_sessions[0],
+          tutor:
+            booking.tutor[0],
         }))
     )
 
@@ -207,7 +205,9 @@ export default function StudentDashboard() {
       error: cancelError,
     } = await supabase
       .from('bookings')
-      .delete()
+      .update({
+        status: 'cancelled',
+      })
       .eq('id', bookingId)
 
     if (cancelError) {
@@ -222,19 +222,13 @@ export default function StudentDashboard() {
       return
     }
 
+    setCancelling(null)
+
     /*
-    * Remove the booking from the local page immediately.
+    * INSTEAD OF removing the booking from the local page immediately, we just reload the dashboard.
     */
 
-    setBookings(
-      (current) =>
-        current.filter(
-          (booking) =>
-            booking.id !== bookingId
-        )
-    )
-
-    setCancelling(null)
+    await loadDashboard()
   }
   
   useEffect(() => {
@@ -247,30 +241,27 @@ export default function StudentDashboard() {
   }
 
   /*
-   * Only show sessions that haven't happened yet.
+   * Only show sessions that haven't happened yet and that aren't cancelled.
    */
 
   const upcomingBookings =
-    bookings.filter(
-      (booking) => {
-        const session =
-          booking.bookable_sessions
-
-        if (!session) {
-          return false
-        }
-
-        const sessionDateTime =
-          new Date(
-            `${session.session_date}T${session.start_time}`
-          )
-
-        return (
-          sessionDateTime >=
-          new Date()
-        )
+    bookings.filter((booking) => {
+      if (booking.status === 'cancelled') {
+        return false
       }
-    )
+
+      const session = booking.bookable_sessions
+
+      if (!session) {
+        return false
+      }
+
+      const sessionDateTime = new Date(
+        `${session.session_date}T${session.start_time}`
+      )
+
+      return sessionDateTime >= new Date()
+    })
 
   /*
    * Sort upcoming sessions chronologically.

@@ -10,7 +10,7 @@ export default function Sidebar({ role }: SidebarProps) {
   const links = {
     student: [
       { name: 'Dashboard', href: '/student' },
-      { name: 'Find a Tutor', href: '/student/find' },
+      { name: 'Book a Tutor', href: '/student/book' },
       { name: 'My Sessions', href: '/student/sessions' },
     ],
 
