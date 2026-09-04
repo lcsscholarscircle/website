@@ -93,7 +93,17 @@ export default function TutorDashboard() {
       return
     }
 
-    setBookings(bookingData ?? [])
+    setBookings(
+      (bookingData ?? []).map((booking) => ({
+        ...booking,
+        bookable_sessions: Array.isArray(booking.bookable_sessions)
+          ? booking.bookable_sessions[0] ?? null
+          : booking.bookable_sessions,
+        student: Array.isArray(booking.student)
+          ? booking.student[0] ?? null
+          : booking.student,
+      }))
+    )
     setLoading(false)
   }
 
