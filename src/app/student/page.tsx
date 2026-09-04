@@ -222,6 +222,42 @@ export default function StudentDashboard() {
       return
     }
 
+    /*
+    * The booking has been successfully cancelled.
+    * Now ask the server to notify the tutor.
+    */
+
+    const notificationResponse = await fetch(
+      '/api/notifications/booking-cancelled',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          bookingId,
+        }),
+      }
+    )
+
+    if (!notificationResponse.ok) {
+      const notificationError =
+        await notificationResponse.json()
+
+      console.error(
+        'Notification error:',
+        notificationError
+      )
+
+      /*
+      * The cancellation itself succeeded, so we don't
+      * want to tell the student that the cancellation failed.
+      *
+      * The server-side notification system can be retried
+      * later.
+      */
+    }
+
     setCancelling(null)
 
     /*
