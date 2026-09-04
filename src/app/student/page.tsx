@@ -441,7 +441,7 @@ export default function StudentDashboard() {
             type="button"
             onClick={() => {
               window.location.href =
-                '/student/bookings'
+                '/student/sessions'
             }}
             className="rounded-2xl border bg-white p-6 text-left shadow-sm transition hover:border-primary/40 hover:shadow"
           >
