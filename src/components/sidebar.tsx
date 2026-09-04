@@ -27,7 +27,7 @@ export default function Sidebar({ role }: SidebarProps) {
   }
 
   return (
-    <aside className="w-64 border-r bg-white min-h-screen p-6">
+    <aside className="w-64 border-r bg-white min-h-screen p-6 flex flex-col">
       <div className="mb-8">
         <h1 className="text-xl font-bold">
           Scholar&apos;s Circle
@@ -49,6 +49,16 @@ export default function Sidebar({ role }: SidebarProps) {
           </Link>
         ))}
       </nav>
+
+      <div className="mt-auto pt-6">
+        <a
+          href="mailto:scholarscircle@larchmontcharter.org"
+          target="_blank"
+          className="block rounded-lg px-3 py-2 text-sm hover:bg-gray-100"
+        >
+          Contact us
+        </a>
+      </div>
     </aside>
   )
 }

@@ -60,7 +60,7 @@ function getSessionDateTime(
 }
 
 function getSessionTypeLabel(
-  sessionType: Session['session_type']
+  sessionType: 'lunch' | 'official' | 'zoom'
 ) {
   switch (sessionType) {
     case 'lunch':
@@ -123,7 +123,26 @@ export default function StudentSessionsPage() {
       console.error('Error loading sessions:', error)
       setSessions([])
     } else {
-      setSessions(data ?? [])
+    const formattedSessions: Session[] = (data ?? []).map(
+        (booking) => ({
+        id: booking.id,
+        status: booking.status,
+        student_id: booking.student_id,
+        tutor_id: booking.tutor_id,
+
+        bookable_sessions:
+            Array.isArray(booking.bookable_sessions)
+            ? booking.bookable_sessions[0] ?? null
+            : booking.bookable_sessions ?? null,
+
+        tutor:
+            Array.isArray(booking.tutor)
+            ? booking.tutor[0] ?? null
+            : booking.tutor ?? null,
+        })
+    )
+
+    setSessions(formattedSessions)
     }
 
     setLoading(false)
