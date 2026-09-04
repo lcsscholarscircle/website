@@ -159,19 +159,15 @@ export default function StudentDashboard() {
     console.log('BOOKINGS:', bookingData)
 
     setBookings(
-      (bookingData ?? [])
-        .filter(
-          (booking) =>
-            booking.bookable_sessions?.[0] &&
-            booking.tutor?.[0]
-        )
-        .map((booking) => ({
-          ...booking,
-          bookable_sessions:
-            booking.bookable_sessions[0],
-          tutor:
-            booking.tutor[0],
-        }))
+      (bookingData ?? []).map((booking) => ({
+        ...booking,
+        bookable_sessions: Array.isArray(booking.bookable_sessions)
+          ? booking.bookable_sessions[0] ?? null
+          : booking.bookable_sessions,
+        tutor: Array.isArray(booking.tutor)
+          ? booking.tutor[0] ?? null
+          : booking.tutor,
+      }))
     )
 
     setSubjects(
