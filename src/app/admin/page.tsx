@@ -272,39 +272,39 @@ export default function TutorsPage() {
           }
         }}
       >
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="flex max-h-[90vh] max-w-2xl flex-col">
+          <DialogHeader className="shrink-0">
             <DialogTitle>
               Promote {selectedStudent?.name} to Tutor
             </DialogTitle>
 
             <DialogDescription>
-              Select the subjects this student is qualified
-              to tutor.
+              Select the subjects this student is qualified to tutor.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3 py-4">
-            {subjects.map((subject) => (
-              <label
-                key={subject.id}
-                className="flex cursor-pointer items-center gap-3 rounded-lg border p-3 hover:bg-gray-50"
-              >
-                <Checkbox
-                  checked={selectedSubjects.includes(subject.id)}
-                  onCheckedChange={() =>
-                    toggleSubject(subject.id)
-                  }
-                />
+          {/* Scrollable subject area */}
+          <div className="flex-1 overflow-y-auto py-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {subjects.map((subject) => (
+                <label
+                  key={subject.id}
+                  className="flex cursor-pointer items-center gap-3 rounded-lg border p-3 hover:bg-gray-50"
+                >
+                  <Checkbox
+                    checked={selectedSubjects.includes(subject.id)}
+                    onCheckedChange={() => toggleSubject(subject.id)}
+                  />
 
-                <span className="text-sm font-medium">
-                  {subject.name}
-                </span>
-              </label>
-            ))}
+                  <span className="text-sm font-medium">
+                    {subject.name}
+                  </span>
+                </label>
+              ))}
+            </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="shrink-0">
             <Button
               variant="outline"
               onClick={closePromotionDialog}
@@ -315,9 +315,7 @@ export default function TutorsPage() {
 
             <Button
               onClick={promoteStudent}
-              disabled={
-                promoting || selectedSubjects.length === 0
-              }
+              disabled={promoting || selectedSubjects.length === 0}
             >
               {promoting ? 'Promoting...' : 'Promote'}
             </Button>
