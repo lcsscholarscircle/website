@@ -65,6 +65,11 @@ Scholar's Circle </h1>
       Sign in with Google
     </Button>
   </div>
+  {/* Static Cookie Notice */}
+  <div className="fixed bottom-0 left-0 w-full border-t bg-background px-6 py-3 text-center text-sm text-muted-foreground">
+    This site uses essential cookies to keep you signed in and provide
+    authentication services. We do not use cookies for advertising or tracking.
+  </div>
 </main>
 
 )
