@@ -49,15 +49,13 @@ export default function Sidebar({ role }: SidebarProps) {
           </Link>
         ))}
       </nav>
-
-      <div className="mt-auto pt-6">
-        <a
-          href="mailto:scholarscircle@larchmontcharter.org"
-          target="_blank"
-          className="block rounded-lg px-3 py-2 text-sm hover:bg-gray-100"
-        >
-          Contact us
-        </a>
+      <div className="mt-auto pt-6 px-3 text-sm">
+        <p className="text-muted-foreground">
+          Contact us at:
+        </p>
+        <p className="text-[11px] font-medium whitespace-nowrap">
+          scholarscircle@larchmontcharter.org
+        </p>
       </div>
     </aside>
   )
