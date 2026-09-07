@@ -594,7 +594,7 @@ export default function BookPage() {
     }
 
     // Create notification for the tutor
-    const { error: notificationError } = await supabase
+    const { error: tutorNotificationError } = await supabase
       .from('notifications')
       .insert({
         recipient_id: selectedTutorData.id,
@@ -603,10 +603,53 @@ export default function BookPage() {
         scheduled_for: new Date().toISOString(),
       })
 
-    if (notificationError) {
+    if (tutorNotificationError) {
       console.error(
-        'Booking succeeded, but notification could not be created:',
-        notificationError
+        'Booking succeeded, but tutor notification could not be created:',
+        tutorNotificationError
+      )
+    }
+
+    // Create notification for the student
+    const { error: studentNotificationError } = await supabase
+      .from('notifications')
+      .insert({
+        recipient_id: user.id,
+        notification_type: 'session_confirmation',
+        session_id: selectedSessionData.id,
+        scheduled_for: new Date().toISOString(),
+      })
+
+    if (studentNotificationError) {
+      console.error(
+        'Booking succeeded, but student notification could not be created:',
+        studentNotificationError
+      )
+    }
+
+    // Create reminder notification
+    const sessionDateTime = new Date(
+      `${selectedSessionData.session_date}T${selectedSessionData.start_time}`
+    )
+
+    const scheduledFor = new Date(
+      sessionDateTime.getTime() - 60 * 60 * 1000
+    ).toISOString()
+
+    const { error: reminderNotificationError } = await supabase
+      .from('notifications')
+      .insert({
+        recipient_id: user.id,
+        notification_type: 'session_reminder',
+        session_id: selectedSessionData.id,
+        scheduled_for: scheduledFor,
+      })
+
+
+    if (reminderNotificationError) {
+      console.error(
+        'Booking succeeded, but reminder notification could not be created:',
+        reminderNotificationError
       )
     }
 
