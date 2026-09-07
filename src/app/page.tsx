@@ -67,8 +67,21 @@ Scholar's Circle </h1>
   </div>
   {/* Static Cookie Notice */}
   <div className="fixed bottom-0 left-0 w-full border-t bg-background px-6 py-3 text-center text-sm text-muted-foreground">
-    This site uses essential cookies to keep you signed in and provide
-    authentication services. We do not use cookies for advertising or tracking.
+    This site uses essential cookies required for authentication and keeping you
+    signed in. We do not use cookies for advertising or tracking.{' '}
+    <a
+      href="/privacy"
+      className="underline hover:text-foreground"
+    >
+      Privacy Policy
+    </a>
+    {' · '}
+    <a
+      href="/terms"
+      className="underline hover:text-foreground"
+    >
+      Terms of Service
+    </a>
   </div>
 </main>
 
