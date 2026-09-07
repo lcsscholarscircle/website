@@ -593,6 +593,23 @@ export default function BookPage() {
       return
     }
 
+    // Create notification for the tutor
+    const { error: notificationError } = await supabase
+      .from('notifications')
+      .insert({
+        recipient_id: selectedTutorData.id,
+        notification_type: 'session_booked',
+        session_id: selectedSessionData.id,
+        scheduled_for: new Date().toISOString(),
+      })
+
+    if (notificationError) {
+      console.error(
+        'Booking succeeded, but notification could not be created:',
+        notificationError
+      )
+    }
+
     setSuccess(
       'Your tutoring session has been booked!'
     )
