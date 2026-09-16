@@ -223,6 +223,43 @@ export default function BookPage() {
     }, [bookings])
 
   /*
+  * Tutor IDs that currently have at least one
+  * upcoming, unbooked session.
+  */
+
+  const tutorsWithAvailableSessions =
+    useMemo(() => {
+      const availableTutorIds = new Set<string>()
+
+      for (const session of sessions) {
+        if (
+          bookedSessionIds.has(session.id)
+        ) {
+          continue
+        }
+
+        const rule =
+          availabilityRules.find(
+            (rule) =>
+              rule.id ===
+              session.availability_rule_id
+          )
+
+        if (rule) {
+          availableTutorIds.add(
+            rule.tutor_id
+          )
+        }
+      }
+
+      return availableTutorIds
+    }, [
+      sessions,
+      availabilityRules,
+      bookedSessionIds,
+    ])
+
+  /*
    * Tutors who teach the selected subject.
    */
 
@@ -240,6 +277,9 @@ export default function BookPage() {
             ) &&
             tutor.subjects.includes(
               selectedSubject
+            ) &&
+            tutorsWithAvailableSessions.has(
+              tutor.id
             )
           )
         }
@@ -247,6 +287,7 @@ export default function BookPage() {
     }, [
       selectedSubject,
       tutors,
+      tutorsWithAvailableSessions,
     ])
 
   /*
