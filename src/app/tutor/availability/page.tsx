@@ -46,6 +46,7 @@ type Availability = {
   end_time: string
   start_date: string
   end_date: string | null
+  duration_minutes: number
   active: boolean
 }
 
@@ -75,6 +76,9 @@ export default function AvailabilityPage() {
   const [zoomEnd, setZoomEnd] = useState<string | null>(null)
   const [zoomStartDate, setZoomStartDate] = useState<string | null>(null)
   const [zoomEndDate, setZoomEndDate] = useState<string | null>(null)
+  const [zoomDuration, setZoomDuration] = useState<string>('30')
+
+  const [togglingId, setTogglingId] = useState<string | null>(null)
 
   const [error, setError] = useState<string | null>(null)
 
@@ -135,53 +139,67 @@ export default function AvailabilityPage() {
   async function toggleSchoolAvailability(
     window: ScheduleWindow
   ) {
-    const existing = availability.find(
-      (item) =>
-        item.schedule_window_id === window.id
-    )
+    if (togglingId === window.id) return
 
-    if (existing) {
-      const { error } = await supabase
-        .from('availability_rules')
-        .delete()
-        .eq('id', existing.id)
+    setTogglingId(window.id)
 
-      if (error) {
-        alert(error.message)
-        return
-      }
-    } else {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+    try {
+      const existing = availability.find(
+        (item) =>
+          item.schedule_window_id === window.id
+      )
 
-      if (!user) return
+      if (existing) {
+        const { error } = await supabase
+          .from('availability_rules')
+          .delete()
+          .eq('id', existing.id)
 
-      const { error } = await supabase
-        .from('availability_rules')
-        .insert({
-          tutor_id: user.id,
-          session_type: window.session_type,
-          schedule_window_id: window.id,
-          day_of_week: window.day_of_week,
-          start_time: window.start_time,
-          end_time: window.end_time,
-          start_date: window.start_date,
-          end_date: window.end_date,
-          active: true,
+        if (error) {
+          alert(error.message)
+          return
+        }
+      } else {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+
+        if (!user) return
+
+        const { error } = await supabase
+          .from('availability_rules')
+          .insert({
+            tutor_id: user.id,
+            session_type: window.session_type,
+            schedule_window_id: window.id,
+            day_of_week: window.day_of_week,
+            start_time: window.start_time,
+            end_time: window.end_time,
+            start_date: window.start_date,
+            end_date: window.end_date,
+            active: true,
+          })
+
+        if (error) {
+          // Duplicate protection from the database
+          if (error.code === '23505') {
+            await loadData()
+            return
+          }
+
+          alert(error.message)
+          return
+        }
+
+        await fetch('/api/generate-sessions', {
+          method: 'POST',
         })
-
-      if (error) {
-        alert(error.message)
-        return
       }
 
-      await fetch('/api/generate-sessions', {
-        method: 'POST',
-      })
+      await loadData()
+    } finally {
+      setTogglingId(null)
     }
-
-    await loadData()
   }
 
   function openZoomDialog() {
@@ -190,6 +208,7 @@ export default function AvailabilityPage() {
     setZoomEnd('')
     setZoomStartDate('')
     setZoomEndDate('')
+    setZoomDuration('30')
     setError('')
     setZoomDialogOpen(true)
   }
@@ -245,6 +264,7 @@ export default function AvailabilityPage() {
         end_time: zoomEnd,
         start_date: zoomStartDate,
         end_date: zoomEndDate || null,
+        duration_minutes: Number(zoomDuration),
         active: true,
       })
 
@@ -330,19 +350,19 @@ export default function AvailabilityPage() {
         windows={lunchWindows}
         isAvailable={isAvailableForWindow}
         onToggle={toggleSchoolAvailability}
+        togglingId={togglingId}
       />
 
       {/* OFFICIAL */}
 
-      <div className="mt-8">
-        <ScheduleSection
-          title="Official Scholar's Circle Sessions"
-          description="These are tutoring periods designated by LCS leaders."
-          windows={officialWindows}
-          isAvailable={isAvailableForWindow}
-          onToggle={toggleSchoolAvailability}
-        />
-      </div>
+      <ScheduleSection
+        title="Official Scholar's Circle Sessions"
+        description="These are tutoring periods designated by LCS leaders."
+        windows={officialWindows}
+        isAvailable={isAvailableForWindow}
+        onToggle={toggleSchoolAvailability}
+        togglingId={togglingId}
+      />
 
       {/* ZOOM */}
 
@@ -383,6 +403,7 @@ export default function AvailabilityPage() {
                   </p>
 
                   <p className="text-sm text-muted-foreground">
+                    {item.duration_minutes}-minute sessions ·{' '}
                     {formatDate(item.start_date)}
                     {item.end_date
                       ? ` · Until ${formatDate(item.end_date)}`
@@ -497,6 +518,25 @@ export default function AvailabilityPage() {
               </div>
             </div>
 
+            <div className="space-y-2">
+              <Label>Session duration</Label>
+
+              <Select
+                value={zoomDuration}
+                onValueChange={(value) => setZoomDuration(value ?? '30')}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select duration" />
+                </SelectTrigger>
+
+                <SelectContent>
+                  <SelectItem value="30">30 minutes</SelectItem>
+                  <SelectItem value="45">45 minutes</SelectItem>
+                  <SelectItem value="60">60 minutes</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Available from</Label>
@@ -560,6 +600,7 @@ function ScheduleSection({
   windows,
   isAvailable,
   onToggle,
+  togglingId,
 }: {
   title: string
   description: string
@@ -570,6 +611,7 @@ function ScheduleSection({
   onToggle: (
     window: ScheduleWindow
   ) => void
+  togglingId: string | null
 }) {
   return (
     <section className="rounded-xl border bg-white">
@@ -611,20 +653,16 @@ function ScheduleSection({
                     {formatDate(window.end_date)}
                   </p>
                 </div>
-
                 <Button
-                  variant={
-                    active
-                      ? 'default'
-                      : 'outline'
-                  }
-                  onClick={() =>
-                    onToggle(window)
-                  }
+                  variant={active ? 'default' : 'outline'}
+                  onClick={() => onToggle(window)}
+                  disabled={togglingId === window.id}
                 >
-                  {active
-                    ? 'Available'
-                    : 'Make Available'}
+                  {togglingId === window.id
+                    ? 'Saving...'
+                    : active
+                      ? 'Available'
+                      : 'Make Available'}
                 </Button>
               </div>
             )
