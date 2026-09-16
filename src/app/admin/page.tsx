@@ -38,11 +38,15 @@ export default function TutorsPage() {
   const [selectedStudent, setSelectedStudent] =
     useState<Profile | null>(null)
 
+  const [selectedTutor, setSelectedTutor] =
+    useState<Profile | null>(null)
+
   const [selectedSubjects, setSelectedSubjects] =
     useState<string[]>([])
 
   const [loading, setLoading] = useState(true)
   const [promoting, setPromoting] = useState(false)
+  const [savingSubjects, setSavingSubjects] = useState(false)
 
   async function loadData() {
     const { data: profiles, error: profileError } =
@@ -98,6 +102,18 @@ export default function TutorsPage() {
     setSelectedSubjects([])
   }
 
+  function openEditSubjectsDialog(tutor: Profile) {
+    setSelectedTutor(tutor)
+    setSelectedSubjects(tutor.subjects ?? [])
+  }
+
+  function closeEditSubjectsDialog() {
+    if (savingSubjects) return
+
+    setSelectedTutor(null)
+    setSelectedSubjects([])
+  }
+
   function toggleSubject(subjectId: string) {
     setSelectedSubjects((current) => {
       if (current.includes(subjectId)) {
@@ -131,6 +147,36 @@ export default function TutorsPage() {
 
     setPromoting(false)
     closePromotionDialog()
+
+    await loadData()
+  }
+
+  async function saveTutorSubjects() {
+    if (!selectedTutor) return
+
+    if (selectedSubjects.length === 0) {
+      alert('Please select at least one subject.')
+      return
+    }
+
+    setSavingSubjects(true)
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        subjects: selectedSubjects,
+      })
+      .eq('id', selectedTutor.id)
+
+    if (error) {
+      console.error(error)
+      alert(error.message)
+      setSavingSubjects(false)
+      return
+    }
+
+    setSavingSubjects(false)
+    closeEditSubjectsDialog()
 
     await loadData()
   }
@@ -208,7 +254,16 @@ export default function TutorsPage() {
                   </div>
                 </div>
 
-                <Badge>Tutor</Badge>
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => openEditSubjectsDialog(tutor)}
+                  >
+                    Edit Subjects
+                  </Button>
+
+                  <Badge>Tutor</Badge>
+                </div>
               </div>
             ))}
           </div>
@@ -318,6 +373,71 @@ export default function TutorsPage() {
               disabled={promoting || selectedSubjects.length === 0}
             >
               {promoting ? 'Promoting...' : 'Promote'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* EDIT TUTOR SUBJECTS DIALOG */}
+
+      <Dialog
+        open={selectedTutor !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeEditSubjectsDialog()
+          }
+        }}
+      >
+        <DialogContent className="flex max-h-[90vh] max-w-2xl flex-col">
+          <DialogHeader className="shrink-0">
+            <DialogTitle>
+              Edit Subjects for {selectedTutor?.name}
+            </DialogTitle>
+
+            <DialogDescription>
+              Select the subjects this tutor is qualified to tutor.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto py-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {subjects.map((subject) => (
+                <label
+                  key={subject.id}
+                  className="flex cursor-pointer items-center gap-3 rounded-lg border p-3 hover:bg-gray-50"
+                >
+                  <Checkbox
+                    checked={selectedSubjects.includes(subject.id)}
+                    onCheckedChange={() =>
+                      toggleSubject(subject.id)
+                    }
+                  />
+
+                  <span className="text-sm font-medium">
+                    {subject.name}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <DialogFooter className="shrink-0">
+            <Button
+              variant="outline"
+              onClick={closeEditSubjectsDialog}
+              disabled={savingSubjects}
+            >
+              Cancel
+            </Button>
+
+            <Button
+              onClick={saveTutorSubjects}
+              disabled={
+                savingSubjects ||
+                selectedSubjects.length === 0
+              }
+            >
+              {savingSubjects ? 'Saving...' : 'Save Changes'}
             </Button>
           </DialogFooter>
         </DialogContent>
