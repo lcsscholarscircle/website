@@ -410,7 +410,7 @@ export default function StudentDashboard() {
 
         {/* QUICK ACTIONS */}
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <div className="mt-6 grid gap-4 sm:grid-cols-3">
 
           <button
             type="button"
@@ -461,6 +461,29 @@ export default function StudentDashboard() {
               </div>
             </div>
           </button>
+
+          <a
+            href="https://forms.gle/PapNj6NidtjLC3S17"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-2xl border bg-white p-6 text-left shadow-sm transition hover:border-primary/40 hover:shadow"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-xl">
+                🎓
+              </div>
+
+              <div>
+                <p className="font-semibold">
+                  Apply to be a tutor!
+                </p>
+
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Apply to join Scholar&apos;s Circle as a tutor.
+                </p>
+              </div>
+            </div>
+          </a>
 
         </div>
 
