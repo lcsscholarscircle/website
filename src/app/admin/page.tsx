@@ -193,7 +193,7 @@ export default function TutorsPage() {
     <DashboardLayout role="leader">
       <div className="mb-8">
         <h1 className="text-3xl font-bold">
-          Tutors
+          Admin Dashboard
         </h1>
 
         <p className="mt-1 text-muted-foreground">

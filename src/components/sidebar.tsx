@@ -22,7 +22,7 @@ export default function Sidebar({ role }: SidebarProps) {
     leader: [
       { name: 'Dashboard', href: '/admin' },
       { name: 'Schedule', href: '/admin/schedule' },
-      { name: 'Requests', href: '/admin/requests' },
+      { name: 'Bookings', href: '/admin/bookings' },
     ],
   }
 
