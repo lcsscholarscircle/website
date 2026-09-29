@@ -7,9 +7,17 @@ import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 
+type SubjectType =
+  | 'math'
+  | 'english'
+  | 'science'
+  | 'history'
+  | 'spanish'
+
 type Subject = {
   id: string
   name: string
+  type: SubjectType
 }
 
 type Tutor = {
@@ -54,6 +62,66 @@ const sessionTypeDescriptions = {
   zoom: 'Online',
   official: 'School tutoring session',
 }
+
+const subjectGroups: {
+  type: SubjectType
+  label: string
+  containerClass: string
+  headerClass: string
+  buttonSelectedClass: string
+  buttonClass: string
+}[] = [
+  {
+    type: 'math',
+    label: 'Math',
+    containerClass: 'border-red-200 bg-red-50/70',
+    headerClass: 'text-red-800',
+    buttonSelectedClass:
+      'border-red-600 bg-red-600 text-white hover:bg-red-700 hover:text-white',
+    buttonClass:
+      'border-red-200 bg-white text-red-900 hover:border-red-400 hover:bg-red-100',
+  },
+  {
+    type: 'english',
+    label: 'English',
+    containerClass: 'border-blue-200 bg-blue-50/70',
+    headerClass: 'text-blue-800',
+    buttonSelectedClass:
+      'border-blue-600 bg-blue-600 text-white hover:bg-blue-700 hover:text-white',
+    buttonClass:
+      'border-blue-200 bg-white text-blue-900 hover:border-blue-400 hover:bg-blue-100',
+  },
+  {
+    type: 'science',
+    label: 'Science',
+    containerClass: 'border-green-200 bg-green-50/70',
+    headerClass: 'text-green-800',
+    buttonSelectedClass:
+      'border-green-600 bg-green-600 text-white hover:bg-green-700 hover:text-white',
+    buttonClass:
+      'border-green-200 bg-white text-green-900 hover:border-green-400 hover:bg-green-100',
+  },
+  {
+    type: 'history',
+    label: 'History',
+    containerClass: 'border-yellow-200 bg-yellow-50/70',
+    headerClass: 'text-yellow-800',
+    buttonSelectedClass:
+      'border-yellow-500 bg-yellow-500 text-white hover:bg-yellow-600 hover:text-white',
+    buttonClass:
+      'border-yellow-200 bg-white text-yellow-900 hover:border-yellow-400 hover:bg-yellow-100',
+  },
+  {
+    type: 'spanish',
+    label: 'Spanish',
+    containerClass: 'border-purple-200 bg-purple-50/70',
+    headerClass: 'text-purple-800',
+    buttonSelectedClass:
+      'border-purple-600 bg-purple-600 text-white hover:bg-purple-700 hover:text-white',
+    buttonClass:
+      'border-purple-200 bg-white text-purple-900 hover:border-purple-400 hover:bg-purple-100',
+  },
+]
 
 export default function BookPage() {
   const [subjects, setSubjects] =
@@ -111,7 +179,7 @@ export default function BookPage() {
     ] = await Promise.all([
       supabase
         .from('subjects')
-        .select('id, name')
+        .select('id, name, type')
         .order('name'),
 
       supabase
@@ -223,9 +291,9 @@ export default function BookPage() {
     }, [bookings])
 
   /*
-  * Tutor IDs that currently have at least one
-  * upcoming, unbooked session.
-  */
+   * Tutor IDs that currently have at least one
+   * upcoming, unbooked session.
+   */
 
   const tutorsWithAvailableSessions =
     useMemo(() => {
@@ -686,7 +754,6 @@ export default function BookPage() {
         scheduled_for: scheduledFor,
       })
 
-
     if (reminderNotificationError) {
       console.error(
         'Booking succeeded, but reminder notification could not be created:',
@@ -829,29 +896,66 @@ export default function BookPage() {
               </p>
             </div>
           ) : (
-            <div className="flex flex-wrap gap-3 p-6">
-              {subjects.map(
-                (subject) => (
-                  <Button
-                    key={
-                      subject.id
-                    }
-                    variant={
-                      selectedSubject ===
-                      subject.id
-                        ? 'default'
-                        : 'outline'
-                    }
-                    className="rounded-full"
-                    onClick={() =>
-                      chooseSubject(
-                        subject.id
-                      )
-                    }
-                  >
-                    {subject.name}
-                  </Button>
-                )
+            <div className="grid gap-4 p-6 sm:grid-cols-2 lg:grid-cols-5">
+              {subjectGroups.map(
+                (group) => {
+                  const groupSubjects =
+                    subjects.filter(
+                      (subject) =>
+                        subject.type ===
+                        group.type
+                    )
+
+                  return (
+                    <div
+                      key={group.type}
+                      className={`rounded-2xl border p-4 ${group.containerClass}`}
+                    >
+                      <h3
+                        className={`mb-3 text-sm font-bold uppercase tracking-wide ${group.headerClass}`}
+                      >
+                        {group.label}
+                      </h3>
+
+                      {groupSubjects.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          No subjects
+                        </p>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          {groupSubjects.map(
+                            (subject) => {
+                              const isSelected =
+                                selectedSubject ===
+                                subject.id
+
+                              return (
+                                <Button
+                                  key={
+                                    subject.id
+                                  }
+                                  variant="outline"
+                                  className={`w-full h-auto min-h-10 justify-start whitespace-normal break-words rounded-xl border text-left shadow-none ${
+                                    isSelected
+                                      ? group.buttonSelectedClass
+                                      : group.buttonClass
+                                  }`}
+                                  onClick={() =>
+                                    chooseSubject(
+                                      subject.id
+                                    )
+                                  }
+                                >
+                                  {subject.name}
+                                </Button>
+                              )
+                            }
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                }
               )}
             </div>
           )}
