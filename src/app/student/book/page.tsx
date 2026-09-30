@@ -741,7 +741,7 @@ export default function BookPage() {
     if (tReminderNotificationError) {
       console.error(
         'Booking succeeded, but tutor reminder notification could not be created:',
-        reminderNotificationError
+        tReminderNotificationError
       )
     }
 
