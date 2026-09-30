@@ -151,6 +151,15 @@ export default function BookPage() {
   const [selectedSession, setSelectedSession] =
     useState<string | null>(null)
 
+  const [studentGrade, setStudentGrade] =
+    useState<number | null>(null)
+
+  const [showLfpSessions, setShowLfpSessions] =
+    useState(true)
+
+  const [studentLoaded, setStudentLoaded] =
+    useState(false)
+
   const [loading, setLoading] =
     useState(true)
 
@@ -170,13 +179,34 @@ export default function BookPage() {
     const today =
       formatLocalDate(new Date())
 
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
+
+    if (userError || !user) {
+      setError(
+        'You must be signed in to book a tutoring session.'
+      )
+
+      setLoading(false)
+      return
+    }
+
     const [
+      studentProfileResult,
       subjectsResult,
       tutorsResult,
       availabilityResult,
       sessionsResult,
       bookingsResult,
     ] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('grade')
+        .eq('id', user.id)
+        .single(),
+
       supabase
         .from('subjects')
         .select('id, name, type')
@@ -227,12 +257,51 @@ export default function BookPage() {
         ),
     ])
 
-    console.log('TUTORS RESULT:', tutorsResult)
-    console.log('AVAILABILITY RESULT:', availabilityResult)
-    console.log('SESSIONS RESULT:', sessionsResult)
-    console.log('BOOKINGS RESULT:', bookingsResult)
+    if (studentProfileResult.error) {
+      console.error(
+        studentProfileResult.error
+      )
+
+      setError(
+        studentProfileResult.error.message
+      )
+
+      setLoading(false)
+      return
+    }
+
+    const grade =
+      studentProfileResult.data?.grade ?? null
+
+    setStudentGrade(grade)
+
+    setShowLfpSessions(false)
+
+    setStudentLoaded(true)
+
+    console.log(
+      'STUDENT PROFILE:',
+      studentProfileResult
+    )
+    console.log(
+      'TUTORS RESULT:',
+      tutorsResult
+    )
+    console.log(
+      'AVAILABILITY RESULT:',
+      availabilityResult
+    )
+    console.log(
+      'SESSIONS RESULT:',
+      sessionsResult
+    )
+    console.log(
+      'BOOKINGS RESULT:',
+      bookingsResult
+    )
 
     const errors = [
+      studentProfileResult.error,
       subjectsResult.error,
       tutorsResult.error,
       availabilityResult.error,
@@ -290,6 +359,45 @@ export default function BookPage() {
       )
     }, [bookings])
 
+  const filteredSessions =
+    useMemo(() => {
+      /*
+      * Lunch sessions take place at LFP.
+      *
+      * Grade 9+ students can always see LFP
+      * sessions.
+      *
+      * Students below grade 9 can see LFP
+      * sessions only when the toggle is ON.
+      *
+      * Students with no grade are treated as
+      * below grade 9 and cannot see LFP sessions.
+      */
+
+      const canSeeLfp =
+        studentGrade !== null &&
+        (
+          studentGrade >= 9 ||
+          showLfpSessions
+        )
+
+      return sessions.filter(
+        (session) => {
+          const isLfpSession =
+            session.session_type === 'lunch'
+
+          return (
+            !isLfpSession ||
+            canSeeLfp
+          )
+        }
+      )
+    }, [
+      sessions,
+      studentGrade,
+      showLfpSessions,
+    ])
+
   /*
    * Tutor IDs that currently have at least one
    * upcoming, unbooked session.
@@ -297,9 +405,10 @@ export default function BookPage() {
 
   const tutorsWithAvailableSessions =
     useMemo(() => {
-      const availableTutorIds = new Set<string>()
+      const availableTutorIds =
+        new Set<string>()
 
-      for (const session of sessions) {
+      for (const session of filteredSessions) {
         if (
           bookedSessionIds.has(session.id)
         ) {
@@ -322,7 +431,7 @@ export default function BookPage() {
 
       return availableTutorIds
     }, [
-      sessions,
+      filteredSessions,
       availabilityRules,
       bookedSessionIds,
     ])
@@ -395,7 +504,7 @@ export default function BookPage() {
           (rule) => rule.id
         )
 
-      return sessions.filter(
+      return filteredSessions.filter(
         (session) => {
           return (
             ruleIds.includes(
@@ -410,7 +519,7 @@ export default function BookPage() {
     }, [
       selectedTutor,
       selectedTutorRules,
-      sessions,
+      filteredSessions,
       bookedSessionIds,
     ])
 
@@ -892,19 +1001,69 @@ export default function BookPage() {
         <section className="rounded-2xl border bg-white shadow-sm">
 
           <div className="border-b p-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
                 1
               </div>
 
-              <div>
-                <h2 className="text-lg font-semibold">
-                  What do you need help with?
-                </h2>
+              <div className="flex-1">
+                <div className="flex items-start justify-between gap-6">
+                  <div>
+                    <h2 className="text-lg font-semibold">
+                      What do you need help with?
+                    </h2>
 
-                <p className="text-sm text-muted-foreground">
-                  Select the subject you want tutoring in.
-                </p>
+                    <p className="text-sm text-muted-foreground">
+                      Select the subject you want tutoring in.
+                    </p>
+                  </div>
+
+                  {studentLoaded &&
+                    studentGrade !== null &&
+                    studentGrade < 9 && (
+                      <div className="shrink-0">
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <p className="text-sm font-medium">
+                              Show LFP sessions
+                            </p>
+
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              LFP sessions take place at the LFP campus during school hours.
+                            </p>
+                          </div>
+
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={showLfpSessions}
+                            onClick={() => {
+                              setShowLfpSessions((current) => !current)
+
+                              setSelectedTutor(null)
+                              setSelectedDate(null)
+                              setSelectedSession(null)
+                              setSuccess('')
+                              setError('')
+                            }}
+                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                              showLfpSessions
+                                ? 'bg-primary'
+                                : 'bg-muted-foreground/30'
+                            }`}
+                          >
+                            <span
+                              className={`pointer-events-none block h-5 w-5 rounded-full bg-white shadow-sm ring-0 transition-transform ${
+                                showLfpSessions
+                                  ? 'translate-x-5'
+                                  : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                </div>
               </div>
             </div>
           </div>
