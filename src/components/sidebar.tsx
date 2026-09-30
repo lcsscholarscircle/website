@@ -37,7 +37,7 @@ export default function Sidebar({ role }: SidebarProps) {
         </h1>
 
         <p className="text-sm text-muted-foreground">
-          Larchmont Charter School
+          Peer Tutoring Organization
         </p>
       </div>
 
