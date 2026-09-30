@@ -23,6 +23,7 @@ type Profile = {
   grade: number | null
   role: string
   subjects: string[]
+  phone_number: string
 }
 
 type Subject = {
@@ -48,11 +49,16 @@ export default function TutorsPage() {
   const [promoting, setPromoting] = useState(false)
   const [savingSubjects, setSavingSubjects] = useState(false)
 
+  async function signOut() {
+    await supabase.auth.signOut()
+    window.location.href = '/'
+  }
+
   async function loadData() {
     const { data: profiles, error: profileError } =
       await supabase
         .from('profiles')
-        .select('id, name, email, grade, role, subjects')
+        .select('id, name, email, grade, role, subjects, phone_number')
         .order('name')
 
     const { data: subjectData, error: subjectError } =
@@ -191,14 +197,25 @@ export default function TutorsPage() {
 
   return (
     <DashboardLayout role="leader">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">
-          Admin Dashboard
-        </h1>
+      <div className="mb-8 flex items-start justify-between gap-4">
 
-        <p className="mt-1 text-muted-foreground">
-          Manage Scholar&apos;s Circle tutors.
-        </p>
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold">
+            Admin Dashboard
+          </h1>
+
+          <p className="mt-1 text-muted-foreground">
+            Manage Scholar&apos;s Circle tutors.
+          </p>
+        </div>
+
+        <button
+          onClick={signOut}
+          className="rounded-lg border px-4 py-2 text-sm hover:bg-white"
+        >
+          Sign out
+        </button>
+
       </div>
 
       {/* CURRENT TUTORS */}
@@ -232,6 +249,10 @@ export default function TutorsPage() {
 
                   <p className="text-sm text-muted-foreground">
                     {tutor.email}
+                  </p>
+
+                  <p className="text-sm text-muted-foreground">
+                    {tutor.phone_number}
                   </p>
 
                   <div className="mt-2 flex flex-wrap gap-2">

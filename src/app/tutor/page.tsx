@@ -26,10 +26,26 @@ type Booking = {
   } | null
 }
 
+type TutorProfile = {
+  id: string
+  role: string
+  grade: number | null
+  phone_number: string | null
+}
+
 export default function TutorDashboard() {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  // Account completion state
+  const [profile, setProfile] = useState<TutorProfile | null>(null)
+  const [profileLoading, setProfileLoading] = useState(true)
+  const [savingProfile, setSavingProfile] = useState(false)
+  const [profileError, setProfileError] = useState('')
+
+  const [grade, setGrade] = useState('')
+  const [phoneNumber, setPhoneNumber] = useState('')
 
   async function loadDashboard() {
     setLoading(true)
@@ -52,6 +68,49 @@ export default function TutorDashboard() {
       setLoading(false)
       return
     }
+
+    /*
+     * Load the tutor's profile.
+     */
+
+    setProfileLoading(true)
+    setProfileError('')
+
+    const {
+      data: profileData,
+      error: profileError,
+    } = await supabase
+      .from('profiles')
+      .select(`
+        id,
+        role,
+        grade,
+        phone_number
+      `)
+      .eq('id', user.id)
+      .single()
+
+    if (profileError) {
+      console.error(profileError)
+
+      setProfileError(
+        'Unable to load your account information.'
+      )
+    } else {
+      setProfile(profileData)
+
+      setGrade(
+        profileData.grade !== null
+          ? String(profileData.grade)
+          : ''
+      )
+
+      setPhoneNumber(
+        profileData.phone_number ?? ''
+      )
+    }
+
+    setProfileLoading(false)
 
     /*
      * Load the tutor's bookings.
@@ -104,12 +163,79 @@ export default function TutorDashboard() {
           : booking.student,
       }))
     )
+
     setLoading(false)
   }
 
   useEffect(() => {
     loadDashboard()
   }, [])
+
+  async function saveProfile() {
+    if (!profile) {
+      return
+    }
+
+    setSavingProfile(true)
+    setProfileError('')
+
+    const parsedGrade = Number(grade)
+
+    if (!grade || Number.isNaN(parsedGrade)) {
+      setProfileError('Please enter your grade.')
+      setSavingProfile(false)
+      return
+    }
+
+    if (!phoneNumber.trim()) {
+      setProfileError('Please enter your phone number.')
+      setSavingProfile(false)
+      return
+    }
+
+    const {
+      data,
+      error,
+    } = await supabase
+      .from('profiles')
+      .update({
+        grade: parsedGrade,
+        phone_number: phoneNumber.trim(),
+      })
+      .eq('id', profile.id)
+      .select(`
+        id,
+        role,
+        grade,
+        phone_number
+      `)
+      .single()
+
+    if (error) {
+      console.error(error)
+
+      setProfileError(
+        'Unable to save your account information. Please try again.'
+      )
+
+      setSavingProfile(false)
+      return
+    }
+
+    setProfile(data)
+
+    setGrade(
+      data.grade !== null
+        ? String(data.grade)
+        : ''
+    )
+
+    setPhoneNumber(
+      data.phone_number ?? ''
+    )
+
+    setSavingProfile(false)
+  }
 
   async function signOut() {
     await supabase.auth.signOut()
@@ -163,8 +289,111 @@ export default function TutorDashboard() {
     )
   }
 
+  const missingGrade = profile?.grade === null
+  const missingPhone = !profile?.phone_number?.trim()
+
+  const showProfilePanel =
+    !profileLoading &&
+    profile?.role === 'tutor' &&
+    (missingGrade || missingPhone)
+
   return (
     <DashboardLayout role="tutor">
+
+      {/* ACCOUNT COMPLETION PANEL */}
+
+      {showProfilePanel && (
+        <div className="fixed inset-x-4 bottom-4 z-50 sm:left-auto sm:right-6 sm:w-[420px]">
+          <div className="rounded-2xl border bg-white p-6 shadow-2xl">
+
+            <div className="mb-5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-lg">
+                  👋
+                </div>
+
+                <div>
+                  <h2 className="font-semibold">
+                    Complete your account
+                  </h2>
+
+                  <p className="text-sm text-muted-foreground">
+                    We need a little more information before you can use your tutor account.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+
+              {missingGrade && (
+                <div>
+                  <label
+                    htmlFor="tutor-grade"
+                    className="mb-1.5 block text-sm font-medium"
+                  >
+                    Grade
+                  </label>
+
+                  <input
+                    id="tutor-grade"
+                    type="number"
+                    min="1"
+                    max="12"
+                    value={grade}
+                    onChange={(event) =>
+                      setGrade(event.target.value)
+                    }
+                    placeholder="e.g. 11"
+                    className="w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+              )}
+
+              {missingPhone && (
+                <div>
+                  <label
+                    htmlFor="tutor-phone"
+                    className="mb-1.5 block text-sm font-medium"
+                  >
+                    Phone number
+                  </label>
+
+                  <input
+                    id="tutor-phone"
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(event) =>
+                      setPhoneNumber(event.target.value)
+                    }
+                    placeholder="e.g. (555) 123-4567"
+                    className="w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+              )}
+
+              {profileError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  {profileError}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={saveProfile}
+                disabled={savingProfile}
+                className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {savingProfile
+                  ? 'Saving...'
+                  : 'Save account information'}
+              </button>
+
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="mx-auto max-w-6xl">
 
         {/* HEADER */}
@@ -176,7 +405,7 @@ export default function TutorDashboard() {
             </h1>
 
             <p className="mt-1 text-muted-foreground">
-              Help your fellow LCS students succeed.
+              Help fellow peers succeed.
             </p>
           </div>
 
@@ -249,34 +478,36 @@ export default function TutorDashboard() {
           )}
 
         </section>
-      {/* UPDATE AVAILABILITY */}
 
-      <div className="mt-6">
-        <button
-          type="button"
-          onClick={() => {
-            window.location.href =
-              '/tutor/availability'
-          }}
-          className="w-full rounded-2xl border bg-white p-6 text-left shadow-sm transition hover:border-primary/40 hover:shadow"
-        >
-          <div className="flex items-center gap-4">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-xl">
-              🗓️
+        {/* UPDATE AVAILABILITY */}
+
+        <div className="mt-6">
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href =
+                '/tutor/availability'
+            }}
+            className="w-full rounded-2xl border bg-white p-6 text-left shadow-sm transition hover:border-primary/40 hover:shadow"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-xl">
+                🗓️
+              </div>
+
+              <div>
+                <p className="font-semibold">
+                  Update My Availability
+                </p>
+
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Choose when you&apos;re available to tutor.
+                </p>
+              </div>
             </div>
+          </button>
+        </div>
 
-            <div>
-              <p className="font-semibold">
-                Update My Availability
-              </p>
-
-              <p className="mt-1 text-sm text-muted-foreground">
-                Choose when you&apos;re available to tutor.
-              </p>
-            </div>
-          </div>
-        </button>
-      </div>
       </div>
     </DashboardLayout>
   )
