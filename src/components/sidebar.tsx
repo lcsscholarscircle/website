@@ -17,12 +17,15 @@ export default function Sidebar({ role }: SidebarProps) {
     tutor: [
       { name: 'Dashboard', href: '/tutor' },
       { name: 'Availability', href: '/tutor/availability' },
+      { name: 'Student Dashboard', href: '/student' },
     ],
 
     leader: [
       { name: 'Dashboard', href: '/admin' },
       { name: 'Schedule', href: '/admin/schedule' },
       { name: 'Bookings', href: '/admin/bookings' },
+      { name: 'Tutor Dashboard', href: '/tutor' },
+      { name: 'Student Dashboard', href: '/student' },
     ],
   }
 
