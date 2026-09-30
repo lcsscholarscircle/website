@@ -702,6 +702,15 @@ export default function BookPage() {
       return
     }
 
+    // consts for notifs
+    const sessionDateTime = new Date(
+      `${selectedSessionData.session_date}T${selectedSessionData.start_time}`
+    )
+
+    const scheduledFor = new Date(
+      sessionDateTime.getTime() - 60 * 60 * 1000
+    ).toISOString()
+
     // Create notification for the tutor
     const { error: tutorNotificationError } = await supabase
       .from('notifications')
@@ -716,6 +725,23 @@ export default function BookPage() {
       console.error(
         'Booking succeeded, but tutor notification could not be created:',
         tutorNotificationError
+      )
+    }
+
+    // Create reminder for the tutor
+    const { error: tReminderNotificationError } = await supabase
+      .from('notifications')
+      .insert({
+        recipient_id: selectedTutorData.id,
+        notification_type: 'session_reminder',
+        session_id: selectedSessionData.id,
+        scheduled_for: scheduledFor,
+      })
+
+    if (tReminderNotificationError) {
+      console.error(
+        'Booking succeeded, but tutor reminder notification could not be created:',
+        reminderNotificationError
       )
     }
 
@@ -737,13 +763,6 @@ export default function BookPage() {
     }
 
     // Create reminder notification
-    const sessionDateTime = new Date(
-      `${selectedSessionData.session_date}T${selectedSessionData.start_time}`
-    )
-
-    const scheduledFor = new Date(
-      sessionDateTime.getTime() - 60 * 60 * 1000
-    ).toISOString()
 
     const { error: reminderNotificationError } = await supabase
       .from('notifications')
@@ -760,6 +779,7 @@ export default function BookPage() {
         reminderNotificationError
       )
     }
+
 
     setSuccess(
       'Your tutoring session has been booked!'
