@@ -31,6 +31,13 @@ type Subject = {
   name: string
 }
 
+type StudentProfile = {
+  id: string
+  role: string
+  grade: number | null
+  subjects: string[] | null
+}
+
 export default function StudentDashboard() {
   const [bookings, setBookings] =
     useState<Booking[]>([])
@@ -48,7 +55,26 @@ export default function StudentDashboard() {
     useState('')
 
   const [cancelling, setCancelling] =
-  useState<string | null>(null)
+    useState<string | null>(null)
+
+  /*
+   * Student account information.
+   */
+
+  const [profile, setProfile] =
+    useState<StudentProfile | null>(null)
+
+  const [profileLoading, setProfileLoading] =
+    useState(true)
+
+  const [savingProfile, setSavingProfile] =
+    useState(false)
+
+  const [profileError, setProfileError] =
+    useState('')
+
+  const [grade, setGrade] =
+    useState('')
 
   async function loadDashboard() {
     setLoading(true)
@@ -76,19 +102,45 @@ export default function StudentDashboard() {
      * Load the student's profile.
      */
 
+    setProfileLoading(true)
+    setProfileError('')
+
     const {
-      data: profile,
+      data: profileData,
       error: profileError,
     } = await supabase
       .from('profiles')
-      .select('subjects')
+      .select(`
+        id,
+        role,
+        grade,
+        subjects
+      `)
       .eq('id', user.id)
       .single()
 
     if (profileError) {
       console.error(profileError)
+
       setError(profileError.message)
+      setProfileError(
+        'Unable to load your account information.'
+      )
+    } else {
+      setProfile(profileData)
+
+      setGrade(
+        profileData.grade !== null
+          ? String(profileData.grade)
+          : ''
+      )
+
+      setStudentSubjects(
+        profileData.subjects || []
+      )
     }
+
+    setProfileLoading(false)
 
     /*
      * Load subjects so we can eventually use them
@@ -174,11 +226,65 @@ export default function StudentDashboard() {
       subjectData || []
     )
 
-    setStudentSubjects(
-      profile?.subjects || []
+    setLoading(false)
+  }
+
+  async function saveProfile() {
+    if (!profile) {
+      return
+    }
+
+    setSavingProfile(true)
+    setProfileError('')
+
+    const parsedGrade = Number(grade)
+
+    if (!grade || Number.isNaN(parsedGrade)) {
+      setProfileError(
+        'Please enter your grade.'
+      )
+
+      setSavingProfile(false)
+      return
+    }
+
+    const {
+      data,
+      error: updateError,
+    } = await supabase
+      .from('profiles')
+      .update({
+        grade: parsedGrade,
+      })
+      .eq('id', profile.id)
+      .select(`
+        id,
+        role,
+        grade,
+        subjects
+      `)
+      .single()
+
+    if (updateError) {
+      console.error(updateError)
+
+      setProfileError(
+        'Unable to save your grade. Please try again.'
+      )
+
+      setSavingProfile(false)
+      return
+    }
+
+    setProfile(data)
+
+    setGrade(
+      data.grade !== null
+        ? String(data.grade)
+        : ''
     )
 
-    setLoading(false)
+    setSavingProfile(false)
   }
 
   async function cancelBooking(
@@ -221,12 +327,13 @@ export default function StudentDashboard() {
     setCancelling(null)
 
     /*
-    * INSTEAD OF removing the booking from the local page immediately, we just reload the dashboard.
-    */
+     * Instead of removing the booking from the local
+     * page immediately, reload the dashboard.
+     */
 
     await loadDashboard()
   }
-  
+
   useEffect(() => {
     loadDashboard()
   }, [])
@@ -237,7 +344,8 @@ export default function StudentDashboard() {
   }
 
   /*
-   * Only show sessions that haven't happened yet and that aren't cancelled.
+   * Only show sessions that haven't happened yet
+   * and that aren't cancelled.
    */
 
   const upcomingBookings =
@@ -285,6 +393,19 @@ export default function StudentDashboard() {
     }
   )
 
+  /*
+   * Determine whether the account completion panel
+   * should be displayed.
+   */
+
+  const missingGrade =
+    profile?.grade === null
+
+  const showProfilePanel =
+    !profileLoading &&
+    profile?.role === 'student' &&
+    missingGrade
+
   if (loading) {
     return (
       <DashboardLayout role="student">
@@ -301,6 +422,81 @@ export default function StudentDashboard() {
 
   return (
     <DashboardLayout role="student">
+
+      {/* ACCOUNT COMPLETION PANEL */}
+
+      {showProfilePanel && (
+        <div className="fixed inset-x-4 bottom-4 z-50 sm:left-auto sm:right-6 sm:w-[420px]">
+          <div className="rounded-2xl border bg-white p-6 shadow-2xl">
+
+            <div className="mb-5">
+              <div className="flex items-center gap-3">
+
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-lg">
+                  👋
+                </div>
+
+                <div>
+                  <h2 className="font-semibold">
+                    Complete your account
+                  </h2>
+
+                  <p className="text-sm text-muted-foreground">
+                    We need a little more information before you can use your student account.
+                  </p>
+                </div>
+
+              </div>
+            </div>
+
+            <div className="space-y-4">
+
+              {missingGrade && (
+                <div>
+                  <label
+                    htmlFor="student-grade"
+                    className="mb-1.5 block text-sm font-medium"
+                  >
+                    Grade
+                  </label>
+
+                  <input
+                    id="student-grade"
+                    type="number"
+                    min="1"
+                    max="12"
+                    value={grade}
+                    onChange={(event) =>
+                      setGrade(event.target.value)
+                    }
+                    placeholder="e.g. 10"
+                    className="w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+              )}
+
+              {profileError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  {profileError}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={saveProfile}
+                disabled={savingProfile}
+                className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {savingProfile
+                  ? 'Saving...'
+                  : 'Save account information'}
+              </button>
+
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="mx-auto max-w-6xl">
 
         {/* HEADER */}
