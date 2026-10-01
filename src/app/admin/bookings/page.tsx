@@ -101,7 +101,6 @@ export default function BookingsPage() {
           slot_index
         )
       `)
-      .order('created_at', { ascending: false })
 
     if (error) {
       console.error(error)
@@ -110,7 +109,20 @@ export default function BookingsPage() {
       return
     }
 
-    setBookings((data ?? []) as unknown as Booking[])
+    const sortedBookings = [...((data ?? []) as unknown as Booking[])].sort(
+      (a, b) => {
+        const dateA = a.session.session_date
+        const dateB = b.session.session_date
+
+        if (dateA !== dateB) {
+          return dateA.localeCompare(dateB)
+        }
+
+        return a.session.start_time.localeCompare(b.session.start_time)
+      }
+    )
+
+    setBookings(sortedBookings)
     setLoading(false)
   }
 
