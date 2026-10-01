@@ -21,6 +21,7 @@ type Profile = {
   name: string
   email: string
   grade: number | null
+  phone_number: string | null
 }
 
 type BookableSession = {
@@ -90,7 +91,8 @@ export default function BookingsPage() {
           id,
           name,
           email,
-          grade
+          grade,
+          phone_number
         ),
         session:bookable_sessions!bookings_session_id_fkey (
           id,
@@ -635,6 +637,21 @@ export default function BookingsPage() {
                   <p className="text-sm text-muted-foreground">
                     {selectedBooking.tutor.email}
                   </p>
+
+                  {selectedBooking.tutor.grade !==
+                    null && (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Grade {selectedBooking.tutor.grade}
+                    </p>
+                  )}
+
+                  {selectedBooking.tutor.phone_number !==
+                    null && (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Phone Number: {selectedBooking.tutor.phone_number}
+                    </p>
+                  )}
+
                 </div>
               </div>
 
