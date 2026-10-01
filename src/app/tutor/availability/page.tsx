@@ -28,7 +28,7 @@ import {
 type ScheduleWindow = {
   id: string
   name: string
-  session_type: 'lunch' | 'official'
+  session_type: 'lfp' | 'library'
   day_of_week: number
   start_time: string
   end_time: string
@@ -39,7 +39,7 @@ type ScheduleWindow = {
 
 type Availability = {
   id: string
-  session_type: 'lunch' | 'zoom' | 'official'
+  session_type: 'lfp' | 'virtual' | 'library'
   schedule_window_id: string | null
   day_of_week: number
   start_time: string
@@ -68,15 +68,15 @@ export default function AvailabilityPage() {
 
   const [loading, setLoading] = useState(true)
 
-  const [zoomDialogOpen, setZoomDialogOpen] = useState(false)
+  const [virtDialogOpen, setVirtDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  const [zoomDay, setZoomDay] = useState<string | null>(null)
-  const [zoomStart, setZoomStart] = useState<string | null>(null)
-  const [zoomEnd, setZoomEnd] = useState<string | null>(null)
-  const [zoomStartDate, setZoomStartDate] = useState<string | null>(null)
-  const [zoomEndDate, setZoomEndDate] = useState<string | null>(null)
-  const [zoomDuration, setZoomDuration] = useState<string>('30')
+  const [virtDay, setVirtDay] = useState<string | null>(null)
+  const [virtStart, setVirtStart] = useState<string | null>(null)
+  const [virtEnd, setVirtEnd] = useState<string | null>(null)
+  const [virtStartDate, setVirtStartDate] = useState<string | null>(null)
+  const [virtEndDate, setVirtEndDate] = useState<string | null>(null)
+  const [virtDuration, setVirtDuration] = useState<string>('30')
 
   const [togglingId, setTogglingId] = useState<string | null>(null)
 
@@ -202,38 +202,38 @@ export default function AvailabilityPage() {
     }
   }
 
-  function openZoomDialog() {
-    setZoomDay('')
-    setZoomStart('')
-    setZoomEnd('')
-    setZoomStartDate('')
-    setZoomEndDate('')
-    setZoomDuration('30')
+  function openVirtDialog() {
+    setVirtDay('')
+    setVirtStart('')
+    setVirtEnd('')
+    setVirtStartDate('')
+    setVirtEndDate('')
+    setVirtDuration('30')
     setError('')
-    setZoomDialogOpen(true)
+    setVirtDialogOpen(true)
   }
 
-  async function saveZoomAvailability() {
+  async function saveVirtAvailability() {
     setError('')
 
     if (
-      !zoomDay ||
-      !zoomStart ||
-      !zoomEnd ||
-      !zoomStartDate
+      !virtDay ||
+      !virtStart ||
+      !virtEnd ||
+      !virtStartDate
     ) {
       setError('Please fill out all required fields.')
       return
     }
 
-    if (zoomEnd <= zoomStart) {
+    if (virtEnd <= virtStart) {
       setError('End time must be after start time.')
       return
     }
 
     if (
-      zoomEndDate &&
-      zoomEndDate < zoomStartDate
+      virtEndDate &&
+      virtEndDate < virtStartDate
     ) {
       setError(
         'End date must be after the start date.'
@@ -257,14 +257,14 @@ export default function AvailabilityPage() {
       .from('availability_rules')
       .insert({
         tutor_id: user.id,
-        session_type: 'zoom',
+        session_type: 'virtual',
         schedule_window_id: null,
-        day_of_week: Number(zoomDay),
-        start_time: zoomStart,
-        end_time: zoomEnd,
-        start_date: zoomStartDate,
-        end_date: zoomEndDate || null,
-        duration_minutes: Number(zoomDuration),
+        day_of_week: Number(virtDay),
+        start_time: virtStart,
+        end_time: virtEnd,
+        start_date: virtStartDate,
+        end_date: virtEndDate || null,
+        duration_minutes: Number(virtDuration),
         active: true,
       })
 
@@ -280,16 +280,16 @@ export default function AvailabilityPage() {
     })
 
     setSaving(false)
-    setZoomDialogOpen(false)
+    setVirtDialogOpen(false)
 
     await loadData()
   }
 
-  async function deleteZoomAvailability(
+  async function deleteVirtAvailability(
     id: string
   ) {
     const confirmed = confirm(
-      'Delete this Zoom availability?'
+      'Delete this Virtual availability?'
     )
 
     if (!confirmed) return
@@ -307,19 +307,19 @@ export default function AvailabilityPage() {
     await loadData()
   }
 
-  const lunchWindows = windows.filter(
+  const lfpWindows = windows.filter(
     (window) =>
-      window.session_type === 'lunch'
+      window.session_type === 'lfp'
   )
 
-  const officialWindows = windows.filter(
+  const libraryWindows = windows.filter(
     (window) =>
-      window.session_type === 'official'
+      window.session_type === 'library'
   )
 
-  const zoomAvailability = availability.filter(
+  const virtAvailability = availability.filter(
     (item) =>
-      item.session_type === 'zoom'
+      item.session_type === 'virtual'
   )
 
   if (loading) {
@@ -342,35 +342,35 @@ export default function AvailabilityPage() {
         </p>
       </div>
 
-      {/* LUNCH */}
+      {/* LFP */}
 
       <ScheduleSection
-        title="Lunch"
-        description="Choose the lunch periods when you are available."
-        windows={lunchWindows}
+        title="LFP Sessions"
+        description="Choose the at-school times when you are available."
+        windows={lfpWindows}
         isAvailable={isAvailableForWindow}
         onToggle={toggleSchoolAvailability}
         togglingId={togglingId}
       />
 
-      {/* OFFICIAL */}
+      {/* LIBRARY */}
 
       <ScheduleSection
-        title="Official Scholar's Circle Sessions"
-        description="These are tutoring periods designated by LCS leaders."
-        windows={officialWindows}
+        title="Library Sessions"
+        description="These sessions will take place in-person, across the street at the library."
+        windows={libraryWindows}
         isAvailable={isAvailableForWindow}
         onToggle={toggleSchoolAvailability}
         togglingId={togglingId}
       />
 
-      {/* ZOOM */}
+      {/* VIRTUAL */}
 
       <section className="mt-8 rounded-xl border bg-white">
         <div className="flex items-center justify-between border-b p-5">
           <div>
             <h2 className="font-semibold">
-              Zoom Availability
+              Virtual Availability
             </h2>
 
             <p className="mt-1 text-sm text-muted-foreground">
@@ -378,18 +378,18 @@ export default function AvailabilityPage() {
             </p>
           </div>
 
-          <Button onClick={openZoomDialog}>
-            Add Zoom Availability
+          <Button onClick={openVirtDialog}>
+            Add virtual Availability
           </Button>
         </div>
 
-        {zoomAvailability.length === 0 ? (
+        {virtAvailability.length === 0 ? (
           <p className="p-5 text-sm text-muted-foreground">
-            No Zoom availability.
+            No virtual availability.
           </p>
         ) : (
           <div className="divide-y">
-            {zoomAvailability.map((item) => (
+            {virtAvailability.map((item) => (
               <div
                 key={item.id}
                 className="flex items-center justify-between p-5"
@@ -414,7 +414,7 @@ export default function AvailabilityPage() {
                 <Button
                   variant="outline"
                   onClick={() =>
-                    deleteZoomAvailability(item.id)
+                    deleteVirtAvailability(item.id)
                   }
                 >
                   Delete
@@ -425,21 +425,21 @@ export default function AvailabilityPage() {
         )}
       </section>
 
-      {/* ZOOM DIALOG */}
+      {/* VIRTUAL DIALOG */}
 
       <Dialog
-        open={zoomDialogOpen}
-        onOpenChange={setZoomDialogOpen}
+        open={virtDialogOpen}
+        onOpenChange={setVirtDialogOpen}
       >
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>
-              Add Zoom Availability
+              Add Virtual Availability
             </DialogTitle>
 
             <DialogDescription>
               Choose a recurring time when students can book
-              a Zoom tutoring session with you.
+              a virtual tutoring session with you.
             </DialogDescription>
           </DialogHeader>
 
@@ -448,8 +448,8 @@ export default function AvailabilityPage() {
               <Label>Day</Label>
 
               <Select
-                value={zoomDay}
-                onValueChange={(value) => setZoomDay(value ?? '')}
+                value={virtDay}
+                onValueChange={(value) => setVirtDay(value ?? '')}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a day" />
@@ -473,8 +473,8 @@ export default function AvailabilityPage() {
                 <Label>Start time</Label>
 
                 <Select
-                  value={zoomStart}
-                  onValueChange={(value) => setZoomStart(value ?? '')}
+                  value={virtStart}
+                  onValueChange={(value) => setVirtStart(value ?? '')}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Start" />
@@ -497,8 +497,8 @@ export default function AvailabilityPage() {
                 <Label>End time</Label>
 
                 <Select
-                  value={zoomEnd}
-                  onValueChange={(value) => setZoomEnd(value ?? '')}
+                  value={virtEnd}
+                  onValueChange={(value) => setVirtEnd(value ?? '')}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="End" />
@@ -522,8 +522,8 @@ export default function AvailabilityPage() {
               <Label>Session duration</Label>
 
               <Select
-                value={zoomDuration}
-                onValueChange={(value) => setZoomDuration(value ?? '30')}
+                value={virtDuration}
+                onValueChange={(value) => setVirtDuration(value ?? '30')}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select duration" />
@@ -543,9 +543,9 @@ export default function AvailabilityPage() {
 
                 <Input
                   type="date"
-                  value={zoomStartDate ?? ''}
+                  value={virtStartDate ?? ''}
                   onChange={(e) =>
-                    setZoomStartDate(e.target.value)
+                    setVirtStartDate(e.target.value)
                   }
                 />
               </div>
@@ -555,9 +555,9 @@ export default function AvailabilityPage() {
 
                 <Input
                   type="date"
-                  value={zoomEndDate ?? ''}
+                  value={virtEndDate ?? ''}
                   onChange={(e) =>
-                    setZoomEndDate(e.target.value)
+                    setVirtEndDate(e.target.value)
                   }
                 />
               </div>
@@ -574,7 +574,7 @@ export default function AvailabilityPage() {
             <Button
               variant="outline"
               onClick={() =>
-                setZoomDialogOpen(false)
+                setVirtDialogOpen(false)
               }
               disabled={saving}
             >
@@ -582,7 +582,7 @@ export default function AvailabilityPage() {
             </Button>
 
             <Button
-              onClick={saveZoomAvailability}
+              onClick={saveVirtAvailability}
               disabled={saving}
             >
               {saving ? 'Saving...' : 'Save Availability'}

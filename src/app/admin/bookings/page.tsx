@@ -26,7 +26,7 @@ type Profile = {
 
 type BookableSession = {
   id: string
-  session_type: 'lunch' | 'zoom' | 'official'
+  session_type: 'lfp' | 'virtual' | 'library'
   session_date: string
   start_time: string
   end_time: string
@@ -161,12 +161,12 @@ export default function BookingsPage() {
     sessionType: BookableSession['session_type']
   ) {
     switch (sessionType) {
-      case 'official':
-        return 'Official'
-      case 'lunch':
-        return 'Lunch'
-      case 'zoom':
-        return 'Zoom'
+      case 'library':
+        return 'Library'
+      case 'lfp':
+        return 'LFP'
+      case 'virtual':
+        return 'Virtual'
     }
   }
 
@@ -174,20 +174,20 @@ export default function BookingsPage() {
     sessionType: BookableSession['session_type']
   ) {
     switch (sessionType) {
-      case 'official':
-        return <Badge>Official</Badge>
+      case 'library':
+        return <Badge>Library</Badge>
 
-      case 'lunch':
+      case 'lfp':
         return (
           <Badge variant="secondary">
-            Lunch
+            LFP
           </Badge>
         )
 
-      case 'zoom':
+      case 'virtual':
         return (
           <Badge variant="outline">
-            Zoom
+            Virtual
           </Badge>
         )
     }

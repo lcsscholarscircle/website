@@ -37,7 +37,7 @@ type BookableSession = {
   id: string
   availability_rule_id: string
   schedule_window_id: string | null
-  session_type: 'lunch' | 'zoom' | 'official'
+  session_type: 'lfp' | 'virtual' | 'library'
   session_date: string
   start_time: string
   end_time: string
@@ -52,15 +52,15 @@ type Booking = {
 }
 
 const sessionTypeLabels = {
-  lunch: 'Lunch',
-  zoom: 'Zoom',
-  official: 'Official Session',
+  lfp: 'LFP',
+  virtual: 'Virtual',
+  library: 'Library',
 }
 
 const sessionTypeDescriptions = {
-  lunch: 'During lunch',
-  zoom: 'Online',
-  official: 'School tutoring session',
+  lfp: 'On campus, during school hours.',
+  virtual: 'Online.',
+  library: 'At the library after school.',
 }
 
 const subjectGroups: {
@@ -361,7 +361,7 @@ export default function BookPage() {
   const filteredSessions =
     useMemo(() => {
       /*
-      * Lunch sessions take place at LFP.
+      * LFP sessions take place at LFP.
       *
       * Grade 9+ students can always see LFP
       * sessions.
@@ -370,11 +370,11 @@ export default function BookPage() {
       * sessions only when the toggle is ON.
       *
       * Students with no grade are treated as
-      * below grade 9 and cannot see LFP sessions.
+      * grade 9+ and can always see LFP sessions.
       */
 
       const canSeeLfp =
-        studentGrade !== null &&
+        studentGrade === null ||
         (
           studentGrade >= 9 ||
           showLfpSessions
@@ -383,7 +383,7 @@ export default function BookPage() {
       return sessions.filter(
         (session) => {
           const isLfpSession =
-            session.session_type === 'lunch'
+            session.session_type === 'lfp'
 
           return (
             !isLfpSession ||
@@ -1481,8 +1481,8 @@ export default function BookPage() {
                   {
                     selectedSessionData
                       .session_type ===
-                    'official'
-                      ? 'Official Session'
+                    'library'
+                      ? 'Library Session'
                       : sessionTypeLabels[
                           selectedSessionData
                             .session_type

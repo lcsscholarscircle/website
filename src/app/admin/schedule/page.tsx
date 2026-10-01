@@ -28,12 +28,13 @@ import {
 type ScheduleWindow = {
   id: string
   name: string
-  session_type: 'lunch' | 'official'
+  session_type: 'lfp' | 'library'
   day_of_week: number
   start_time: string
   end_time: string
   start_date: string
   end_date: string
+  duration_minutes: number | null
   active: boolean
 }
 
@@ -61,14 +62,15 @@ export default function SchedulePage() {
 
   const [name, setName] = useState('')
   const [sessionType, setSessionType] = useState<
-    'lunch' | 'official'
-  >('official')
+    'lfp' | 'library'
+  >('library')
 
   const [day, setDay] = useState('')
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  const [durationMinutes, setDurationMinutes] = useState('')
 
   const [error, setError] = useState('')
 
@@ -95,7 +97,7 @@ export default function SchedulePage() {
 
   function resetForm() {
     setName('')
-    setSessionType('official')
+    setSessionType('library')
     setDay('')
     setStartTime('')
     setEndTime('')
@@ -103,6 +105,7 @@ export default function SchedulePage() {
     setEndDate('')
     setError('')
     setEditingWindow(null)
+    setDurationMinutes('')
   }
 
   function openAddDialog() {
@@ -120,6 +123,11 @@ export default function SchedulePage() {
     setEndTime(window.end_time.slice(0, 5))
     setStartDate(window.start_date)
     setEndDate(window.end_date)
+    setDurationMinutes(
+      window.duration_minutes != null
+        ? String(window.duration_minutes)
+        : ''
+    )
 
     setError('')
     setDialogOpen(true)
@@ -134,7 +142,8 @@ export default function SchedulePage() {
       !startTime ||
       !endTime ||
       !startDate ||
-      !endDate
+      !endDate ||
+      !durationMinutes
     ) {
       setError('Please fill out all fields.')
       return
@@ -150,6 +159,13 @@ export default function SchedulePage() {
       return
     }
 
+    const duration = Number(durationMinutes)
+
+    if (!Number.isInteger(duration) || duration <= 0) {
+      setError('Duration must be a positive number of minutes.')
+      return
+    }
+
     setSaving(true)
 
     const windowData = {
@@ -160,6 +176,7 @@ export default function SchedulePage() {
       end_time: endTime,
       start_date: startDate,
       end_date: endDate,
+      duration_minutes: duration,
     }
 
     let error
@@ -247,7 +264,7 @@ export default function SchedulePage() {
             </p>
 
             <p className="mt-1 text-sm text-muted-foreground">
-              Add lunch or official tutoring times.
+              Add LFP or library tutoring times.
             </p>
           </div>
         ) : (
@@ -263,9 +280,9 @@ export default function SchedulePage() {
                   </h2>
 
                   <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs">
-                    {window.session_type === 'official'
-                      ? 'Official'
-                      : 'Lunch'}
+                    {window.session_type === 'library'
+                      ? 'Library'
+                      : 'LFP'}
                   </span>
                 </div>
 
@@ -333,7 +350,7 @@ export default function SchedulePage() {
               <Label>Name</Label>
 
               <Input
-                placeholder="Official Tutoring"
+                placeholder="Library Tutoring"
                 value={name}
                 onChange={(e) =>
                   setName(e.target.value)
@@ -348,7 +365,7 @@ export default function SchedulePage() {
                 value={sessionType}
                 onValueChange={(value) =>
                   setSessionType(
-                    value as 'lunch' | 'official'
+                    value as 'lfp' | 'library'
                   )
                 }
               >
@@ -357,17 +374,27 @@ export default function SchedulePage() {
                 </SelectTrigger>
 
                 <SelectContent>
-                  <SelectItem value="official">
-                    Official
+                  <SelectItem value="library">
+                    Library
                   </SelectItem>
 
-                  <SelectItem value="lunch">
-                    Lunch
+                  <SelectItem value="lfp">
+                    LFP
                   </SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2">
+              <Label>Duration (minutes)</Label>
 
+              <Input
+                type="text"
+                inputMode="numeric"
+                placeholder="60"
+                value={durationMinutes}
+                onChange={(e) => setDurationMinutes(e.target.value)}
+              />
+            </div>
             <div className="space-y-2">
               <Label>Day</Label>
 

@@ -55,7 +55,7 @@ return ( <main className="flex min-h-screen items-center justify-center px-6"> <
 Scholar's Circle </h1>
 
     <p className="mt-2 text-muted-foreground">
-      Peer tutoring at Larchmont Charter School.
+      A peer-to-peer tutoring network.
     </p>
 
     <Button

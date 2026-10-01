@@ -13,7 +13,7 @@ type Booking = {
 
   bookable_sessions: {
     id: string
-    session_type: 'lunch' | 'zoom' | 'official'
+    session_type: 'lfp' | 'virtual' | 'library'
     session_date: string
     start_time: string
     end_time: string
@@ -583,17 +583,17 @@ function TutorBookingCard({
 }
 
 function formatSessionType(
-  type: 'lunch' | 'zoom' | 'official'
+  type: 'lfp' | 'virtual' | 'library'
 ) {
   switch (type) {
-    case 'lunch':
-      return 'Lunch'
+    case 'lfp':
+      return 'LFP'
 
-    case 'zoom':
-      return 'Zoom'
+    case 'virtual':
+      return 'Virtual'
 
-    case 'official':
-      return 'Official Session'
+    case 'library':
+      return 'Library'
 
     default:
       return type

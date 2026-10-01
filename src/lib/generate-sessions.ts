@@ -14,7 +14,7 @@ const supabaseAdmin = createClient(
 type AvailabilityRule = {
   id: string
   tutor_id: string
-  session_type: 'lunch' | 'zoom' | 'official'
+  session_type: 'lfp' | 'virtual' | 'library'
   schedule_window_id: string | null
   day_of_week: number
   start_time: string
@@ -27,12 +27,13 @@ type AvailabilityRule = {
 
 type ScheduleWindow = {
   id: string
-  session_type: 'lunch' | 'official'
+  session_type: 'lfp' | 'library'
   day_of_week: number
   start_time: string
   end_time: string
   start_date: string
   end_date: string
+  duration_minutes: number | null
   active: boolean
 }
 
@@ -40,7 +41,7 @@ type ExistingSession = {
   id: string
   availability_rule_id: string
   schedule_window_id: string | null
-  session_type: 'lunch' | 'zoom' | 'official'
+  session_type: 'lfp' | 'virtual' | 'library'
   session_date: string
   start_time: string
   end_time: string
@@ -173,42 +174,19 @@ export async function generateSessions(
   for (const rule of
     (availabilityRules || []) as AvailabilityRule[]) {
 
-    /*
-     * Determine duration.
-     */
-
-    let duration =
-      rule.duration_minutes
-
-    if (rule.session_type === 'lunch') {
-      duration = 30
-    }
-
-    if (rule.session_type === 'official') {
-      duration = 40
-    }
-
-    /*
-     * We can't generate sessions without
-     * a duration.
-     */
-
-    if (!duration) {
-      continue
-    }
-
-    /*
-     * School-defined sessions must reference
-     * a schedule window.
-     */
+    let duration = rule.duration_minutes
 
     let scheduleWindow:
       | ScheduleWindow
       | null = null
 
+    /*
+    * School-defined sessions use the duration
+    * and schedule defined by the schedule window.
+    */
     if (
-      rule.session_type === 'lunch' ||
-      rule.session_type === 'official'
+      rule.session_type === 'lfp' ||
+      rule.session_type === 'library'
     ) {
       if (!rule.schedule_window_id) {
         continue
@@ -224,10 +202,16 @@ export async function generateSessions(
       }
 
       /*
-       * The tutor's selected day must match
-       * the school's schedule day.
-       */
+      * The school schedule window is authoritative
+      * for LFP and library session duration.
+      */
+      duration =
+        scheduleWindow.duration_minutes
 
+      /*
+      * The tutor's selected day must match
+      * the school's schedule day.
+      */
       if (
         rule.day_of_week !==
         scheduleWindow.day_of_week
@@ -237,9 +221,12 @@ export async function generateSessions(
     }
 
     /*
-     * Walk through every calendar date in
-     * the generation window.
-     */
+    * We can't generate sessions without
+    * a duration.
+    */
+    if (!duration) {
+      continue
+    }
 
     const currentDate =
       new Date(today)
@@ -299,7 +286,7 @@ export async function generateSessions(
           rule.day_of_week
         ) {
           /*
-           * For lunch and official sessions,
+           * For lfp and library sessions,
            * the school schedule is authoritative.
            */
 

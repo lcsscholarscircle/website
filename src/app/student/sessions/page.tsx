@@ -13,7 +13,7 @@ type Session = {
 
   bookable_sessions: {
     id: string
-    session_type: 'lunch' | 'official' | 'zoom'
+    session_type: 'lfp' | 'library' | 'virtual'
     session_date: string
     start_time: string
     end_time: string
@@ -60,15 +60,15 @@ function getSessionDateTime(
 }
 
 function getSessionTypeLabel(
-  sessionType: 'lunch' | 'official' | 'zoom'
+  sessionType: 'lfp' | 'library' | 'virtual'
 ) {
   switch (sessionType) {
-    case 'lunch':
-      return 'Lunch'
-    case 'zoom':
-      return 'Zoom'
-    case 'official':
-      return 'Official Session'
+    case 'lfp':
+      return 'LFP'
+    case 'virtual':
+      return 'Virtual'
+    case 'library':
+      return 'Library'
     default:
       return sessionType
   }
@@ -325,7 +325,7 @@ export default function StudentSessionsPage() {
                       <Badge variant="outline">
                         {getSessionTypeLabel(
                           booking.bookable_sessions
-                            ?.session_type ?? 'official'
+                            ?.session_type ?? 'library'
                         )}
                       </Badge>
 
@@ -388,7 +388,7 @@ export default function StudentSessionsPage() {
                       <Badge variant="outline">
                         {getSessionTypeLabel(
                           booking.bookable_sessions
-                            ?.session_type ?? 'official'
+                            ?.session_type ?? 'library'
                         )}
                       </Badge>
 
