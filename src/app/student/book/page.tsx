@@ -217,7 +217,6 @@ export default function BookPage() {
         .select(
           'id, name, email, grade, subjects, role'
         )
-        .eq('role', 'tutor')
         .order('name'),
 
       supabase
