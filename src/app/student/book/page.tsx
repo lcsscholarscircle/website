@@ -59,7 +59,7 @@ const sessionTypeLabels = {
 
 const sessionTypeDescriptions = {
   lfp: 'On campus, during school hours.',
-  virtual: 'Online.',
+  virtual: 'Online, via Google Meet.',
   library: 'At the library after school.',
 }
 
