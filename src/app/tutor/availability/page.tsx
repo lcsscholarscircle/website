@@ -676,7 +676,7 @@ export default function AvailabilityPage() {
               <Select
                 value={virtDuration}
                 onValueChange={(value) =>
-                  setVirtDuration(value)
+                  setVirtDuration(value ?? '30')
                 }
               >
                 <SelectTrigger>
