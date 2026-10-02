@@ -60,7 +60,7 @@ const sessionTypeLabels = {
 const sessionTypeDescriptions = {
   lfp: 'On campus, during school hours.',
   virtual: 'Online, via Google Meet.',
-  library: 'At the library after school.',
+  library: 'At the Filipe de Neve library, across from LFP.',
 }
 
 const subjectGroups: {
