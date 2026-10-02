@@ -504,7 +504,7 @@ export default function AvailabilityPage() {
           </div>
 
           <Button onClick={openVirtDialog}>
-            Add virtual Availability
+            Add Virtual Availability
           </Button>
         </div>
 
