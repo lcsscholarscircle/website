@@ -12,6 +12,7 @@ type Booking = {
   student_id: string
   tutor_id: string
   status: string
+  subject: string | null
   bookable_sessions: {
     id: string
     session_type: 'lfp' | 'virtual' | 'library'
@@ -179,6 +180,7 @@ export default function StudentDashboard() {
         student_id,
         tutor_id,
         status,
+        subject,
 
         bookable_sessions (
           id,
@@ -725,6 +727,12 @@ function BookingCard({
                 session.session_type
               )}
             </Badge>
+          
+            {booking.subject && (
+              <Badge variant="secondary">
+                {booking.subject}
+              </Badge>
+            )}
           </div>
 
           <h3 className="mt-3 text-lg font-semibold">
