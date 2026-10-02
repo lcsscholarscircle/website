@@ -136,6 +136,46 @@ export default function AvailabilityPage() {
     )
   }
 
+  /**
+   * Generates sessions only for one availability rule.
+   *
+   * This replaces the old global:
+   *   POST /api/generate-sessions
+   *
+   * Keeping the date as a local YYYY-MM-DD string
+   * avoids the timezone/date-shift issue we previously
+   * ran into with toISOString().
+   */
+  async function generateSessionsForRule(
+    ruleId: string
+  ) {
+    const today = new Date()
+
+    const year = today.getFullYear()
+    const month = String(
+      today.getMonth() + 1
+    ).padStart(2, '0')
+    const day = String(
+      today.getDate()
+    ).padStart(2, '0')
+
+    const startDate =
+      `${year}-${month}-${day}`
+
+    const { error } = await supabase.rpc(
+      'generate_sessions_for_rule',
+      {
+        p_rule_id: ruleId,
+        p_start_date: startDate,
+        p_days_ahead: 60,
+      }
+    )
+
+    if (error) {
+      throw error
+    }
+  }
+
   async function toggleSchoolAvailability(
     window: ScheduleWindow
   ) {
@@ -164,9 +204,15 @@ export default function AvailabilityPage() {
           data: { user },
         } = await supabase.auth.getUser()
 
-        if (!user) return
+        if (!user) {
+          alert('You must be signed in.')
+          return
+        }
 
-        const { error } = await supabase
+        const {
+          data: newRule,
+          error,
+        } = await supabase
           .from('availability_rules')
           .insert({
             tutor_id: user.id,
@@ -179,6 +225,8 @@ export default function AvailabilityPage() {
             end_date: window.end_date,
             active: true,
           })
+          .select('id')
+          .single()
 
         if (error) {
           // Duplicate protection from the database
@@ -191,9 +239,24 @@ export default function AvailabilityPage() {
           return
         }
 
-        await fetch('/api/generate-sessions', {
-          method: 'POST',
-        })
+        try {
+          await generateSessionsForRule(
+            newRule.id
+          )
+        } catch (generationError) {
+          console.error(
+            'Failed to generate sessions:',
+            generationError
+          )
+
+          alert(
+            generationError instanceof Error
+              ? generationError.message
+              : 'Availability was saved, but sessions could not be generated.'
+          )
+
+          return
+        }
       }
 
       await loadData()
@@ -222,12 +285,16 @@ export default function AvailabilityPage() {
       !virtEnd ||
       !virtStartDate
     ) {
-      setError('Please fill out all required fields.')
+      setError(
+        'Please fill out all required fields.'
+      )
       return
     }
 
     if (virtEnd <= virtStart) {
-      setError('End time must be after start time.')
+      setError(
+        'End time must be after start time.'
+      )
       return
     }
 
@@ -243,46 +310,69 @@ export default function AvailabilityPage() {
 
     setSaving(true)
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
 
-    if (!user) {
-      setError('You must be signed in.')
+      if (!user) {
+        setError('You must be signed in.')
+        return
+      }
+
+      const {
+        data: newRule,
+        error,
+      } = await supabase
+        .from('availability_rules')
+        .insert({
+          tutor_id: user.id,
+          session_type: 'virtual',
+          schedule_window_id: null,
+          day_of_week: Number(virtDay),
+          start_time: virtStart,
+          end_time: virtEnd,
+          start_date: virtStartDate,
+          end_date: virtEndDate || null,
+          duration_minutes: Number(
+            virtDuration
+          ),
+          active: true,
+        })
+        .select('id')
+        .single()
+
+      if (error) {
+        console.error(error)
+        setError(error.message)
+        return
+      }
+
+      try {
+        await generateSessionsForRule(
+          newRule.id
+        )
+      } catch (generationError) {
+        console.error(
+          'Failed to generate sessions:',
+          generationError
+        )
+
+        setError(
+          generationError instanceof Error
+            ? generationError.message
+            : 'Availability was saved, but sessions could not be generated.'
+        )
+
+        return
+      }
+
+      setVirtDialogOpen(false)
+
+      await loadData()
+    } finally {
       setSaving(false)
-      return
     }
-
-    const { error } = await supabase
-      .from('availability_rules')
-      .insert({
-        tutor_id: user.id,
-        session_type: 'virtual',
-        schedule_window_id: null,
-        day_of_week: Number(virtDay),
-        start_time: virtStart,
-        end_time: virtEnd,
-        start_date: virtStartDate,
-        end_date: virtEndDate || null,
-        duration_minutes: Number(virtDuration),
-        active: true,
-      })
-
-    if (error) {
-      console.error(error)
-      setError(error.message)
-      setSaving(false)
-      return
-    }
-
-    await fetch('/api/generate-sessions', {
-      method: 'POST',
-    })
-
-    setSaving(false)
-    setVirtDialogOpen(false)
-
-    await loadData()
   }
 
   async function deleteVirtAvailability(
@@ -317,10 +407,11 @@ export default function AvailabilityPage() {
       window.session_type === 'library'
   )
 
-  const virtAvailability = availability.filter(
-    (item) =>
-      item.session_type === 'virtual'
-  )
+  const virtAvailability =
+    availability.filter(
+      (item) =>
+        item.session_type === 'virtual'
+    )
 
   if (loading) {
     return (
@@ -448,22 +539,26 @@ export default function AvailabilityPage() {
               <Label>Day</Label>
 
               <Select
-                value={virtDay}
-                onValueChange={(value) => setVirtDay(value ?? '')}
+                value={virtDay ?? ''}
+                onValueChange={(value) =>
+                  setVirtDay(value ?? '')
+                }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a day" />
                 </SelectTrigger>
 
                 <SelectContent>
-                  {days.map((dayName, index) => (
-                    <SelectItem
-                      key={dayName}
-                      value={String(index)}
-                    >
-                      {dayName}
-                    </SelectItem>
-                  ))}
+                  {days.map(
+                    (dayName, index) => (
+                      <SelectItem
+                        key={dayName}
+                        value={String(index)}
+                      >
+                        {dayName}
+                      </SelectItem>
+                    )
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -473,8 +568,10 @@ export default function AvailabilityPage() {
                 <Label>Start time</Label>
 
                 <Select
-                  value={virtStart}
-                  onValueChange={(value) => setVirtStart(value ?? '')}
+                  value={virtStart ?? ''}
+                  onValueChange={(value) =>
+                    setVirtStart(value ?? '')
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Start" />
@@ -497,8 +594,10 @@ export default function AvailabilityPage() {
                 <Label>End time</Label>
 
                 <Select
-                  value={virtEnd}
-                  onValueChange={(value) => setVirtEnd(value ?? '')}
+                  value={virtEnd ?? ''}
+                  onValueChange={(value) =>
+                    setVirtEnd(value ?? '')
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="End" />
@@ -523,16 +622,24 @@ export default function AvailabilityPage() {
 
               <Select
                 value={virtDuration}
-                onValueChange={(value) => setVirtDuration(value ?? '30')}
+                onValueChange={(value) =>
+                  setVirtDuration(value ?? '30')
+                }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select duration" />
                 </SelectTrigger>
 
                 <SelectContent>
-                  <SelectItem value="30">30 minutes</SelectItem>
-                  <SelectItem value="45">45 minutes</SelectItem>
-                  <SelectItem value="60">60 minutes</SelectItem>
+                  <SelectItem value="30">
+                    30 minutes
+                  </SelectItem>
+                  <SelectItem value="45">
+                    45 minutes
+                  </SelectItem>
+                  <SelectItem value="60">
+                    60 minutes
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -545,7 +652,9 @@ export default function AvailabilityPage() {
                   type="date"
                   value={virtStartDate ?? ''}
                   onChange={(e) =>
-                    setVirtStartDate(e.target.value)
+                    setVirtStartDate(
+                      e.target.value
+                    )
                   }
                 />
               </div>
@@ -557,7 +666,9 @@ export default function AvailabilityPage() {
                   type="date"
                   value={virtEndDate ?? ''}
                   onChange={(e) =>
-                    setVirtEndDate(e.target.value)
+                    setVirtEndDate(
+                      e.target.value
+                    )
                   }
                 />
               </div>
@@ -585,7 +696,9 @@ export default function AvailabilityPage() {
               onClick={saveVirtAvailability}
               disabled={saving}
             >
-              {saving ? 'Saving...' : 'Save Availability'}
+              {saving
+                ? 'Saving...'
+                : 'Save Availability'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -632,7 +745,8 @@ function ScheduleSection({
       ) : (
         <div className="divide-y">
           {windows.map((window) => {
-            const active = isAvailable(window)
+            const active =
+              isAvailable(window)
 
             return (
               <div
@@ -642,21 +756,38 @@ function ScheduleSection({
                 <div>
                   <p className="font-medium">
                     {days[window.day_of_week]} ·{' '}
-                    {formatTime(window.start_time)}
+                    {formatTime(
+                      window.start_time
+                    )}
                     {' - '}
-                    {formatTime(window.end_time)}
+                    {formatTime(
+                      window.end_time
+                    )}
                   </p>
 
                   <p className="text-sm text-muted-foreground">
-                    {formatDate(window.start_date)}
+                    {formatDate(
+                      window.start_date
+                    )}
                     {' - '}
-                    {formatDate(window.end_date)}
+                    {formatDate(
+                      window.end_date
+                    )}
                   </p>
                 </div>
+
                 <Button
-                  variant={active ? 'default' : 'outline'}
-                  onClick={() => onToggle(window)}
-                  disabled={togglingId === window.id}
+                  variant={
+                    active
+                      ? 'default'
+                      : 'outline'
+                  }
+                  onClick={() =>
+                    onToggle(window)
+                  }
+                  disabled={
+                    togglingId === window.id
+                  }
                 >
                   {togglingId === window.id
                     ? 'Saving...'
@@ -677,8 +808,16 @@ function generateTimes() {
   const result = []
 
   for (let hour = 7; hour <= 22; hour++) {
-    for (const minute of [0, 15, 30, 45]) {
-      if (hour === 22 && minute > 30) {
+    for (const minute of [
+      0,
+      15,
+      30,
+      45,
+    ]) {
+      if (
+        hour === 22 &&
+        minute > 30
+      ) {
         continue
       }
 
@@ -687,14 +826,21 @@ function generateTimes() {
         `${String(minute).padStart(2, '0')}`
 
       const date = new Date()
-      date.setHours(hour, minute)
+
+      date.setHours(
+        hour,
+        minute
+      )
 
       result.push({
         value,
-        label: date.toLocaleTimeString([], {
-          hour: 'numeric',
-          minute: '2-digit',
-        }),
+        label: date.toLocaleTimeString(
+          [],
+          {
+            hour: 'numeric',
+            minute: '2-digit',
+          }
+        ),
       })
     }
   }
@@ -703,7 +849,9 @@ function generateTimes() {
 }
 
 function formatTime(time: string) {
-  const [hours, minutes] = time.split(':')
+  const [hours, minutes] =
+    time.split(':')
+
   const date = new Date()
 
   date.setHours(
@@ -711,10 +859,13 @@ function formatTime(time: string) {
     Number(minutes)
   )
 
-  return date.toLocaleTimeString([], {
-    hour: 'numeric',
-    minute: '2-digit',
-  })
+  return date.toLocaleTimeString(
+    [],
+    {
+      hour: 'numeric',
+      minute: '2-digit',
+    }
+  )
 }
 
 function formatDate(date: string) {
