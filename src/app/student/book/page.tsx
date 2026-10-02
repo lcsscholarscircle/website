@@ -163,6 +163,9 @@ export default function BookPage() {
   const [loading, setLoading] =
     useState(true)
 
+  const [now, setNow] =
+    useState(() => new Date())
+
   const [booking, setBooking] =
     useState(false)
 
@@ -345,6 +348,18 @@ export default function BookPage() {
   }, [])
 
   /*
+   * Keep the current time fresh so sessions disappear from the
+   * booking page as soon as they enter the 24-hour window.
+   */
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setNow(new Date())
+    }, 60 * 1000)
+
+    return () => window.clearInterval(interval)
+  }, [])
+
+  /*
    * Session IDs that are already occupied.
    */
 
@@ -385,9 +400,16 @@ export default function BookPage() {
           const isLfpSession =
             session.session_type === 'lfp'
 
-          return (
-            !isLfpSession ||
-            canSeeLfp
+          if (
+            isLfpSession &&
+            !canSeeLfp
+          ) {
+            return false
+          }
+
+          return isSessionAtLeast24HoursAway(
+            session,
+            now
           )
         }
       )
@@ -395,6 +417,7 @@ export default function BookPage() {
       sessions,
       studentGrade,
       showLfpSessions,
+      now,
     ])
 
   /*
@@ -702,6 +725,23 @@ export default function BookPage() {
         'Please select a session.'
       )
 
+      return
+    }
+
+    /*
+     * Re-check the 24-hour cutoff immediately before booking.
+     * This prevents a session from being booked if it crossed
+     * into the 24-hour window while the page was open.
+     */
+    if (
+      !isSessionAtLeast24HoursAway(
+        selectedSessionData
+      )
+    ) {
+      setError(
+        'Sessions must be booked at least 24 hours in advance. Please choose another time.'
+      )
+      setSelectedSession(null)
       return
     }
 
@@ -1599,6 +1639,27 @@ function ProgressStep({
         </p>
       </div>
     </div>
+  )
+}
+
+/*
+ * A session can only be booked if its start time is at least
+ * 24 hours in the future.
+ *
+ * Session dates/times are interpreted in the browser's local
+ * timezone, matching the existing booking-page date/time logic.
+ */
+function isSessionAtLeast24HoursAway(
+  session: Pick<BookableSession, 'session_date' | 'start_time'>,
+  referenceDate: Date = new Date()
+) {
+  const sessionStart = new Date(
+    `${session.session_date}T${session.start_time}`
+  )
+
+  return (
+    sessionStart.getTime() - referenceDate.getTime() >=
+    24 * 60 * 60 * 1000
   )
 }
 
