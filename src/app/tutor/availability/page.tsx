@@ -176,6 +176,24 @@ export default function AvailabilityPage() {
     }
   }
 
+  async function deleteAvailabilityRule(
+    ruleId: string
+  ) {
+    const { data, error } =
+      await supabase.rpc(
+        'delete_availability_rule',
+        {
+          p_rule_id: ruleId,
+        }
+      )
+  
+    if (error) {
+      throw error
+    }
+  
+    return data
+  }
+
   async function toggleSchoolAvailability(
     window: ScheduleWindow
   ) {
@@ -190,13 +208,20 @@ export default function AvailabilityPage() {
       )
 
       if (existing) {
-        const { error } = await supabase
-          .from('availability_rules')
-          .delete()
-          .eq('id', existing.id)
-
-        if (error) {
-          alert(error.message)
+        try {
+          await deleteAvailabilityRule(existing.id)
+        } catch (error) {
+          console.error(
+            'Failed to delete availability:',
+            error
+          )
+        
+          alert(
+            error instanceof Error
+              ? error.message
+              : 'Failed to remove availability.'
+          )
+        
           return
         }
       } else {
@@ -384,16 +409,23 @@ export default function AvailabilityPage() {
 
     if (!confirmed) return
 
-    const { error } = await supabase
-      .from('availability_rules')
-      .delete()
-      .eq('id', id)
-
-    if (error) {
-      alert(error.message)
+    try {
+      await deleteAvailabilityRule(id)
+    } catch (error) {
+      console.error(
+        'Failed to delete availability:',
+        error
+      )
+    
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'Failed to remove availability.'
+      )
+    
       return
     }
-
+      
     await loadData()
   }
 
