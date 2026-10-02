@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/dashboard-layout'
 import { supabase } from '@/lib/supabase'
 
@@ -32,6 +33,8 @@ type Subject = {
 }
 
 export default function TutorsPage() {
+  const router = useRouter()
+
   const [students, setStudents] = useState<Profile[]>([])
   const [tutors, setTutors] = useState<Profile[]>([])
   const [subjects, setSubjects] = useState<Subject[]>([])
@@ -46,6 +49,7 @@ export default function TutorsPage() {
     useState<string[]>([])
 
   const [loading, setLoading] = useState(true)
+  const [authorized, setAuthorized] = useState(false)
   const [promoting, setPromoting] = useState(false)
   const [savingSubjects, setSavingSubjects] = useState(false)
 
@@ -55,40 +59,72 @@ export default function TutorsPage() {
   }
 
   async function loadData() {
+    setLoading(true)
+  
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
+  
+    if (userError || !user) {
+      router.replace('/')
+      return
+    }
+  
+    const { data: currentProfile, error: currentProfileError } =
+      await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+  
+    if (
+      currentProfileError ||
+      !currentProfile ||
+      currentProfile.role !== 'leader'
+    ) {
+      router.replace('/student')
+      return
+    }
+  
+    setAuthorized(true)
+  
     const { data: profiles, error: profileError } =
       await supabase
         .from('profiles')
-        .select('id, name, email, grade, role, subjects, phone_number')
+        .select(
+          'id, name, email, grade, role, subjects, phone_number'
+        )
         .order('name')
-
+  
     const { data: subjectData, error: subjectError } =
       await supabase
         .from('subjects')
         .select('id, name')
         .order('name')
-
+  
     if (profileError) {
       console.error(profileError)
     }
-
+  
     if (subjectError) {
       console.error(subjectError)
     }
-
+  
     if (profiles) {
       setStudents(
         profiles.filter((profile) => profile.role === 'student')
       )
-
+  
       setTutors(
         profiles.filter((profile) => profile.role === 'tutor')
       )
     }
-
+  
     if (subjectData) {
       setSubjects(subjectData)
     }
-
+  
     setLoading(false)
   }
 
@@ -187,7 +223,7 @@ export default function TutorsPage() {
     await loadData()
   }
 
-  if (loading) {
+  if (loading || !authorized) {
     return (
       <DashboardLayout role="leader">
         <p>Loading...</p>
