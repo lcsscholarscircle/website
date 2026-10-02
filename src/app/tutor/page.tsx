@@ -10,6 +10,7 @@ type Booking = {
   status: string
   student_id: string
   tutor_id: string
+  subject: string | null
 
   bookable_sessions: {
     id: string
@@ -126,6 +127,7 @@ export default function TutorDashboard() {
         status,
         student_id,
         tutor_id,
+        subject,
 
         bookable_sessions (
           id,
@@ -543,7 +545,13 @@ function TutorBookingCard({
                 session.session_type
               )}
             </Badge>
-
+          
+            {booking.subject && (
+              <Badge variant="secondary">
+                {booking.subject}
+              </Badge>
+            )}
+          
             <Badge variant="secondary">
               Booked
             </Badge>
