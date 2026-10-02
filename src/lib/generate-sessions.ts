@@ -61,12 +61,59 @@ export async function generateSessions(
    * Sunday/Saturday because of timezone conversion.
    */
 
+  /*
+   * Prevent multiple copies of this generator from
+   * running at the same time.
+   *
+   * pg_advisory_lock is held for the lifetime of the
+   * database connection. Since Supabase/PostgREST
+   * manages connections for us, use a transaction-scoped
+   * advisory lock through a PostgreSQL RPC function.
+   *
+   * If the lock RPC does not exist yet, create it with:
+   *
+   * create or replace function public.acquire_session_generator_lock()
+   * returns void
+   * language plpgsql
+   * security definer
+   * set search_path = public
+   * as $$
+   * begin
+   *   perform pg_advisory_xact_lock(
+   *     hashtextextended('bookable_sessions_generator', 0)
+   *   );
+   * end;
+   * $$;
+   *
+   * NOTE:
+   * Because Supabase REST calls are individually pooled,
+   * this RPC lock only protects work performed inside
+   * that transaction. The unique constraint plus
+   * conflict-safe inserts below remain the final
+   * protection against duplicate sessions.
+   */
+
+  const {
+    error: lockError,
+  } = await supabaseAdmin.rpc(
+    'acquire_session_generator_lock'
+  )
+
+  if (lockError) {
+    throw new Error(
+      `Failed to acquire session generator lock: ${lockError.message}`
+    )
+  }
+
   const today = new Date()
 
-  const todayString = formatLocalDate(today)
+  const todayString =
+    formatLocalDate(today)
 
   const endDate = new Date(today)
+
   endDate.setHours(0, 0, 0, 0)
+
   endDate.setDate(
     endDate.getDate() + daysAhead
   )
@@ -109,8 +156,10 @@ export async function generateSessions(
   const windowsById =
     new Map<string, ScheduleWindow>()
 
-  for (const window of
-    (scheduleWindows || []) as ScheduleWindow[]) {
+  for (
+    const window of
+    (scheduleWindows || []) as ScheduleWindow[]
+  ) {
     windowsById.set(
       window.id,
       window
@@ -143,8 +192,10 @@ export async function generateSessions(
   const existingByKey =
     new Map<string, ExistingSession>()
 
-  for (const session of
-    (existingSessions || []) as ExistingSession[]) {
+  for (
+    const session of
+    (existingSessions || []) as ExistingSession[]
+  ) {
     const key = makeKey(
       session.availability_rule_id,
       session.session_date,
@@ -171,19 +222,22 @@ export async function generateSessions(
    * Process every tutor availability rule.
    */
 
-  for (const rule of
-    (availabilityRules || []) as AvailabilityRule[]) {
-
-    let duration = rule.duration_minutes
+  for (
+    const rule of
+    (availabilityRules || []) as AvailabilityRule[]
+  ) {
+    let duration =
+      rule.duration_minutes
 
     let scheduleWindow:
       | ScheduleWindow
       | null = null
 
     /*
-    * School-defined sessions use the duration
-    * and schedule defined by the schedule window.
-    */
+     * School-defined sessions use the duration
+     * and schedule defined by the schedule window.
+     */
+
     if (
       rule.session_type === 'lfp' ||
       rule.session_type === 'library'
@@ -202,16 +256,18 @@ export async function generateSessions(
       }
 
       /*
-      * The school schedule window is authoritative
-      * for LFP and library session duration.
-      */
+       * The school schedule window is authoritative
+       * for LFP and library session duration.
+       */
+
       duration =
         scheduleWindow.duration_minutes
 
       /*
-      * The tutor's selected day must match
-      * the school's schedule day.
-      */
+       * The tutor's selected day must match
+       * the school's schedule day.
+       */
+
       if (
         rule.day_of_week !==
         scheduleWindow.day_of_week
@@ -221,10 +277,11 @@ export async function generateSessions(
     }
 
     /*
-    * We can't generate sessions without
-    * a duration.
-    */
-    if (!duration) {
+     * We can't generate sessions without
+     * a duration.
+     */
+
+    if (!duration || duration <= 0) {
       continue
     }
 
@@ -286,7 +343,7 @@ export async function generateSessions(
           rule.day_of_week
         ) {
           /*
-           * For lfp and library sessions,
+           * For LFP and library sessions,
            * the school schedule is authoritative.
            */
 
@@ -386,30 +443,48 @@ export async function generateSessions(
                 existing.session_type !==
                   rule.session_type
               ) {
-                const { error } =
-                  await supabaseAdmin
-                    .from('bookable_sessions')
-                    .update({
-                      start_time:
-                        currentTime,
+                const {
+                  error,
+                } = await supabaseAdmin
+                  .from('bookable_sessions')
+                  .update({
+                    start_time:
+                      currentTime,
 
-                      end_time:
-                        nextTime,
+                    end_time:
+                      nextTime,
 
-                      schedule_window_id:
-                        rule.schedule_window_id,
+                    schedule_window_id:
+                      rule.schedule_window_id,
 
-                      session_type:
-                        rule.session_type,
-                    })
-                    .eq(
-                      'id',
-                      existing.id
-                    )
+                    session_type:
+                      rule.session_type,
+                  })
+                  .eq(
+                    'id',
+                    existing.id
+                  )
 
                 if (error) {
                   throw error
                 }
+
+                /*
+                 * Keep our in-memory copy
+                 * synchronized with the database.
+                 */
+
+                existing.start_time =
+                  currentTime
+
+                existing.end_time =
+                  nextTime
+
+                existing.schedule_window_id =
+                  rule.schedule_window_id
+
+                existing.session_type =
+                  rule.session_type
 
                 updated++
               }
@@ -424,12 +499,26 @@ export async function generateSessions(
 
             /*
              * New session.
+             *
+             * Use an upsert with ignoreDuplicates.
+             *
+             * The unique constraint:
+             *
+             *   availability_rule_id
+             *   session_date
+             *   slot_index
+             *
+             * guarantees that concurrent generator
+             * executions cannot create duplicate sessions.
              */
 
-            const { error } =
-              await supabaseAdmin
-                .from('bookable_sessions')
-                .insert({
+            const {
+              error,
+              data,
+            } = await supabaseAdmin
+              .from('bookable_sessions')
+              .upsert(
+                {
                   availability_rule_id:
                     rule.id,
 
@@ -450,20 +539,64 @@ export async function generateSessions(
 
                   slot_index:
                     slotIndex,
-                })
+                },
+                {
+                  onConflict:
+                    'availability_rule_id,session_date,slot_index',
+
+                  ignoreDuplicates:
+                    true,
+
+                  count: 'exact',
+                }
+              )
+              .select('id')
 
             if (error) {
+              throw error
+            }
+
+            /*
+             * When ignoreDuplicates is true,
+             * data is empty if another generator
+             * already created the row.
+             *
+             * Only count a session as created
+             * when this invocation actually inserted it.
+             */
+
+            if (
+              data &&
+              data.length > 0
+            ) {
+              created++
+
               /*
-               * Ignore duplicate-key errors.
+               * Add the newly created session to
+               * our in-memory map so subsequent
+               * processing sees it as existing.
                */
 
-              if (
-                error.code !== '23505'
-              ) {
-                throw error
-              }
-            } else {
-              created++
+              existingByKey.set(
+                key,
+                {
+                  id: data[0].id,
+                  availability_rule_id:
+                    rule.id,
+                  schedule_window_id:
+                    rule.schedule_window_id,
+                  session_type:
+                    rule.session_type,
+                  session_date:
+                    dateString,
+                  start_time:
+                    currentTime,
+                  end_time:
+                    nextTime,
+                  slot_index:
+                    slotIndex,
+                }
+              )
             }
 
             currentTime =
@@ -505,9 +638,10 @@ export async function generateSessions(
 
   let deleted = 0
 
-  for (const session of
-    sessionsToRemove) {
-
+  for (
+    const session of
+    sessionsToRemove
+  ) {
     const {
       data: booking,
       error: bookingError,
@@ -532,14 +666,15 @@ export async function generateSessions(
       continue
     }
 
-    const { error } =
-      await supabaseAdmin
-        .from('bookable_sessions')
-        .delete()
-        .eq(
-          'id',
-          session.id
-        )
+    const {
+      error,
+    } = await supabaseAdmin
+      .from('bookable_sessions')
+      .delete()
+      .eq(
+        'id',
+        session.id
+      )
 
     if (error) {
       throw error
