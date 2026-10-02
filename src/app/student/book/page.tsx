@@ -823,6 +823,9 @@ export default function BookPage() {
 
         tutor_id:
           selectedTutorData.id,
+
+        subject:
+          selectedSubjectData?.name ?? null,
       })
 
     if (bookingError) {
