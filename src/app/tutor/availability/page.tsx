@@ -478,14 +478,16 @@ export default function AvailabilityPage() {
 
       {/* LIBRARY */}
 
-      <ScheduleSection
-        title="Library Sessions"
-        description="These sessions will take place in-person, across the street at the library."
-        windows={libraryWindows}
-        isAvailable={isAvailableForWindow}
-        onToggle={toggleSchoolAvailability}
-        togglingId={togglingId}
-      />
+      <div className="mt-8">
+        <ScheduleSection
+          title="Library Sessions"
+          description="These sessions will take place in-person, across the street at the library."
+          windows={libraryWindows}
+          isAvailable={isAvailableForWindow}
+          onToggle={toggleSchoolAvailability}
+          togglingId={togglingId}
+        />
+      </div>
 
       {/* VIRTUAL */}
 
@@ -783,10 +785,14 @@ function ScheduleSection({
             return (
               <div
                 key={window.id}
-                className="flex items-center justify-between p-5"
+                className="flex items-center justify-between gap-6 p-5"
               >
-                <div>
-                  <p className="font-medium">
+                <div className="min-w-0">
+                  <p className="font-semibold">
+                    {window.name}
+                  </p>
+
+                  <p className="mt-1 text-sm text-muted-foreground">
                     {days[window.day_of_week]} ·{' '}
                     {formatTime(
                       window.start_time
@@ -796,8 +802,10 @@ function ScheduleSection({
                       window.end_time
                     )}
                   </p>
+                </div>
 
-                  <p className="text-sm text-muted-foreground">
+                <div className="flex shrink-0 items-center gap-4">
+                  <span className="rounded-full border bg-muted/50 px-3 py-1 text-xs font-medium text-muted-foreground">
                     {formatDate(
                       window.start_date
                     )}
@@ -805,28 +813,28 @@ function ScheduleSection({
                     {formatDate(
                       window.end_date
                     )}
-                  </p>
-                </div>
+                  </span>
 
-                <Button
-                  variant={
-                    active
-                      ? 'default'
-                      : 'outline'
-                  }
-                  onClick={() =>
-                    onToggle(window)
-                  }
-                  disabled={
-                    togglingId === window.id
-                  }
-                >
-                  {togglingId === window.id
-                    ? 'Saving...'
-                    : active
-                      ? 'Available'
-                      : 'Make Available'}
-                </Button>
+                  <Button
+                    variant={
+                      active
+                        ? 'default'
+                        : 'outline'
+                    }
+                    onClick={() =>
+                      onToggle(window)
+                    }
+                    disabled={
+                      togglingId === window.id
+                    }
+                  >
+                    {togglingId === window.id
+                      ? 'Saving...'
+                      : active
+                        ? 'Available'
+                        : 'Make Available'}
+                  </Button>
+                </div>
               </div>
             )
           })}
