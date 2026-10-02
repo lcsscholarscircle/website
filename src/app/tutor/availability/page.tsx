@@ -561,56 +561,67 @@ export default function AvailabilityPage() {
             <DialogTitle>
               Add Virtual Availability
             </DialogTitle>
-
+      
             <DialogDescription>
               Choose a recurring time when students can book
               a virtual tutoring session with you.
             </DialogDescription>
           </DialogHeader>
-
+      
           <div className="space-y-5 py-4">
+            {/* DAY */}
             <div className="space-y-2">
               <Label>Day</Label>
-
+      
               <Select
                 value={virtDay ?? ''}
                 onValueChange={(value) =>
-                  setVirtDay(value ?? '')
+                  setVirtDay(value)
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a day" />
+                  <SelectValue placeholder="Select a day">
+                    {virtDay !== null && virtDay !== ''
+                      ? days[Number(virtDay)]
+                      : 'Select a day'}
+                  </SelectValue>
                 </SelectTrigger>
-
+      
                 <SelectContent>
-                  {days.map(
-                    (dayName, index) => (
-                      <SelectItem
-                        key={dayName}
-                        value={String(index)}
-                      >
-                        {dayName}
-                      </SelectItem>
-                    )
-                  )}
+                  {days.map((dayName, index) => (
+                    <SelectItem
+                      key={dayName}
+                      value={String(index)}
+                    >
+                      {dayName}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
-
+      
+            {/* TIME */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Start time</Label>
-
+      
                 <Select
                   value={virtStart ?? ''}
                   onValueChange={(value) =>
-                    setVirtStart(value ?? '')
+                    setVirtStart(value)
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Start" />
+                    <SelectValue placeholder="Start">
+                      {virtStart
+                        ? times.find(
+                            (time) =>
+                              time.value === virtStart
+                          )?.label ?? virtStart
+                        : 'Start'}
+                    </SelectValue>
                   </SelectTrigger>
-
+      
                   <SelectContent>
                     {times.map((time) => (
                       <SelectItem
@@ -623,20 +634,27 @@ export default function AvailabilityPage() {
                   </SelectContent>
                 </Select>
               </div>
-
+      
               <div className="space-y-2">
                 <Label>End time</Label>
-
+      
                 <Select
                   value={virtEnd ?? ''}
                   onValueChange={(value) =>
-                    setVirtEnd(value ?? '')
+                    setVirtEnd(value)
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="End" />
+                    <SelectValue placeholder="End">
+                      {virtEnd
+                        ? times.find(
+                            (time) =>
+                              time.value === virtEnd
+                          )?.label ?? virtEnd
+                        : 'End'}
+                    </SelectValue>
                   </SelectTrigger>
-
+      
                   <SelectContent>
                     {times.map((time) => (
                       <SelectItem
@@ -650,71 +668,79 @@ export default function AvailabilityPage() {
                 </Select>
               </div>
             </div>
-
+      
+            {/* SESSION DURATION */}
             <div className="space-y-2">
               <Label>Session duration</Label>
-
+      
               <Select
                 value={virtDuration}
                 onValueChange={(value) =>
-                  setVirtDuration(value ?? '30')
+                  setVirtDuration(value)
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select duration" />
+                  <SelectValue placeholder="Select duration">
+                    {virtDuration === '30'
+                      ? '30 minutes'
+                      : virtDuration === '45'
+                        ? '45 minutes'
+                        : virtDuration === '60'
+                          ? '60 minutes'
+                          : 'Select duration'}
+                  </SelectValue>
                 </SelectTrigger>
-
+      
                 <SelectContent>
                   <SelectItem value="30">
                     30 minutes
                   </SelectItem>
+      
                   <SelectItem value="45">
                     45 minutes
                   </SelectItem>
+      
                   <SelectItem value="60">
                     60 minutes
                   </SelectItem>
                 </SelectContent>
               </Select>
             </div>
-
+      
+            {/* DATES */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Available from</Label>
-
+      
                 <Input
                   type="date"
                   value={virtStartDate ?? ''}
                   onChange={(e) =>
-                    setVirtStartDate(
-                      e.target.value
-                    )
+                    setVirtStartDate(e.target.value)
                   }
                 />
               </div>
-
+      
               <div className="space-y-2">
                 <Label>Available until</Label>
-
+      
                 <Input
                   type="date"
                   value={virtEndDate ?? ''}
                   onChange={(e) =>
-                    setVirtEndDate(
-                      e.target.value
-                    )
+                    setVirtEndDate(e.target.value)
                   }
                 />
               </div>
             </div>
-
+      
             {error && (
               <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                 {error}
               </div>
             )}
           </div>
-
+      
           <DialogFooter>
             <Button
               variant="outline"
@@ -725,7 +751,7 @@ export default function AvailabilityPage() {
             >
               Cancel
             </Button>
-
+      
             <Button
               onClick={saveVirtAvailability}
               disabled={saving}
