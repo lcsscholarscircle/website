@@ -492,10 +492,6 @@ export default function BookPage() {
           difference = b.sessionTimeCount - a.sessionTimeCount
           break
 
-        case 'sessions':
-          difference = b.sessionCount - a.sessionCount
-          break
-
         case 'subjects':
           difference = b.subjectCount - a.subjectCount
           break
@@ -842,7 +838,7 @@ export default function BookPage() {
                 <div>
                   <p className="font-medium">Show LFP sessions</p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    LFP sessions take place at school during school hours.
+                    LFP sessions take place on the LFP campus during school hours.
                   </p>
                 </div>
 
@@ -1138,7 +1134,6 @@ export default function BookPage() {
               >
                 <option value="next_available">Next available</option>
                 <option value="session_times">Most session times</option>
-                <option value="sessions">Most session dates</option>
                 <option value="subjects">Most subjects</option>
               </select>
             </div>
