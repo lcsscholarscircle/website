@@ -191,6 +191,15 @@ export default function BookPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
+  const subjectTypeOrder: Record<SubjectType, number> = {
+    math: 1,
+    english: 2,
+    science: 3,
+    history: 4,
+    spanish: 5,
+    college: 6,
+  }
+
   const loadData = useCallback(async (background = false) => {
     if (background) setRefreshing(true)
     else setLoading(true)
@@ -1053,7 +1062,16 @@ export default function BookPage() {
                 const tutorSubjects = (tutor.subjects || [])
                   .map((id) => subjectsById.get(id))
                   .filter((subject): subject is Subject => Boolean(subject))
+                  .sort((a, b) => {
+                    const typeDifference =
+                      subjectTypeOrder[a.type] - subjectTypeOrder[b.type]
+                    if (typeDifference !== 0) return typeDifference
 
+                    const sortDifference = (a.sort ?? Infinity) - (b.sort ?? Infinity)
+                    if (sortDifference !== 0) return sortDifference
+
+                    return a.name.localeCompare(b.name)
+                  })
                 const nextSession = tutorSessions[0]
                 const sessionsByRule = groupSessionsByRule(tutorSessions)
 
@@ -1106,7 +1124,7 @@ export default function BookPage() {
                         <div className="text-left sm:text-right">
                           <p className="font-semibold">{tutorSessions.length} {tutorSessions.length === 1 ? 'session' : 'sessions'}</p>
                           <p className="text-xs text-muted-foreground">
-                            across {sessionsByRule.length} {sessionsByRule.length === 1 ? 'availability rule' : 'availability rules'}
+                            across {sessionsByRule.length} {sessionsByRule.length === 1 ? 'session time' : 'session times'}
                           </p>
                         </div>
                         <span className="text-lg text-muted-foreground">{expanded ? '−' : '+'}</span>
@@ -1118,7 +1136,7 @@ export default function BookPage() {
                         <div className="mb-4">
                           <h4 className="font-semibold">Choose a session</h4>
                           <p className="mt-1 text-sm text-muted-foreground">
-                            Recurring sessions are grouped by availability rule. Expand a group to see its dates.
+                            Recurring sessions are grouped by session day and time. Expand a group to see its dates.
                           </p>
                         </div>
 
