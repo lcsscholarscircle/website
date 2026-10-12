@@ -23,6 +23,7 @@ type Subject = {
   name: string
   type: SubjectType
   sort: number | null
+  description: string | null
 }
 
 type Tutor = {
@@ -55,14 +56,14 @@ type Booking = {
   session_id: string
   student_id: string
   tutor_id: string
-  status: string
 }
 
-const SESSION_TYPES: SessionType[] = [
-  'lfp',
-  'library',
-  'virtual',
-]
+type TutorResult = {
+  tutor: Tutor
+  sessions: BookableSession[]
+}
+
+const SESSION_TYPES: SessionType[] = ['lfp', 'library', 'virtual']
 
 const SESSION_LABELS: Record<SessionType, string> = {
   lfp: 'LFP',
@@ -79,14 +80,66 @@ const SESSION_DESCRIPTIONS: Record<SessionType, string> = {
 const SUBJECT_GROUPS: {
   type: SubjectType
   label: string
-  color: string
+  container: string
+  outline: string
+  card: string
+  selected: string
+  tutorCard: string
 }[] = [
-  { type: 'math', label: 'Math', color: 'border-red-200 bg-red-50 text-red-800' },
-  { type: 'english', label: 'English', color: 'border-blue-200 bg-blue-50 text-blue-800' },
-  { type: 'science', label: 'Science', color: 'border-green-200 bg-green-50 text-green-800' },
-  { type: 'history', label: 'History', color: 'border-yellow-200 bg-yellow-50 text-yellow-800' },
-  { type: 'spanish', label: 'Spanish', color: 'border-purple-200 bg-purple-50 text-purple-800' },
-  { type: 'college', label: 'College Prep', color: 'border-indigo-200 bg-indigo-50 text-indigo-800' },
+  {
+    type: 'math',
+    label: 'Math',
+    container: 'bg-red-50/40',
+    outline: 'border-red-300',
+    card: 'border-red-200 bg-white hover:border-red-400 hover:bg-red-50',
+    selected: 'border-red-600 bg-red-600 text-white hover:bg-red-700',
+    tutorCard: 'border-red-200 bg-red-50 text-red-900',
+  },
+  {
+    type: 'english',
+    label: 'English',
+    container: 'bg-blue-50/40',
+    outline: 'border-blue-300',
+    card: 'border-blue-200 bg-white hover:border-blue-400 hover:bg-blue-50',
+    selected: 'border-blue-600 bg-blue-600 text-white hover:bg-blue-700',
+    tutorCard: 'border-blue-200 bg-blue-50 text-blue-900',
+  },
+  {
+    type: 'science',
+    label: 'Science',
+    container: 'bg-green-50/40',
+    outline: 'border-green-300',
+    card: 'border-green-200 bg-white hover:border-green-400 hover:bg-green-50',
+    selected: 'border-green-600 bg-green-600 text-white hover:bg-green-700',
+    tutorCard: 'border-green-200 bg-green-50 text-green-900',
+  },
+  {
+    type: 'history',
+    label: 'History',
+    container: 'bg-yellow-50/40',
+    outline: 'border-yellow-300',
+    card: 'border-yellow-200 bg-white hover:border-yellow-400 hover:bg-yellow-50',
+    selected: 'border-yellow-500 bg-yellow-500 text-white hover:bg-yellow-600',
+    tutorCard: 'border-yellow-200 bg-yellow-50 text-yellow-900',
+  },
+  {
+    type: 'spanish',
+    label: 'Spanish',
+    container: 'bg-purple-50/40',
+    outline: 'border-purple-300',
+    card: 'border-purple-200 bg-white hover:border-purple-400 hover:bg-purple-50',
+    selected: 'border-purple-600 bg-purple-600 text-white hover:bg-purple-700',
+    tutorCard: 'border-purple-200 bg-purple-50 text-purple-900',
+  },
+  {
+    type: 'college',
+    label: 'College Prep',
+    container: 'bg-teal-50/40',
+    outline: 'border-teal-300',
+    card: 'border-teal-200 bg-white hover:border-teal-400 hover:bg-teal-50',
+    selected: 'border-teal-600 bg-teal-600 text-white hover:bg-teal-700',
+    tutorCard: 'border-teal-200 bg-teal-50 text-teal-900',
+  },
 ]
 
 const WEEKDAYS = [
@@ -128,6 +181,8 @@ export default function BookPage() {
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('any')
   const [showMoreFilters, setShowMoreFilters] = useState(false)
 
+  const [expandedRules, setExpandedRules] = useState<Set<string>>(new Set())
+
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [booking, setBooking] = useState(false)
@@ -137,17 +192,14 @@ export default function BookPage() {
   const [success, setSuccess] = useState('')
 
   const loadData = useCallback(async (background = false) => {
-    if (background) {
-      setRefreshing(true)
-    } else {
-      setLoading(true)
-    }
+    if (background) setRefreshing(true)
+    else setLoading(true)
 
     setError('')
 
-    const today = formatLocalDate(new Date())
-
     try {
+      const today = formatLocalDate(new Date())
+
       const {
         data: { user },
         error: userError,
@@ -174,7 +226,7 @@ export default function BookPage() {
 
         supabase
           .from('subjects')
-          .select('id, name, type, sort')
+          .select('id, name, type, sort, description')
           .order('sort', { ascending: true, nullsFirst: false })
           .order('name', { ascending: true }),
 
@@ -207,7 +259,7 @@ export default function BookPage() {
 
         supabase
           .from('bookings')
-          .select('id, session_id, student_id, tutor_id, status'),
+          .select('id, session_id, student_id, tutor_id'),
       ])
 
       const errors = [
@@ -227,19 +279,14 @@ export default function BookPage() {
 
       setStudentGrade(profileResult.data?.grade ?? null)
       setStudentLoaded(true)
-
-      // Students below grade 9 do not see LFP sessions by default.
-      // A NULL grade is treated as grade 9 or above.
       setShowLfpSessions(false)
 
       setSubjects((subjectsResult.data || []) as Subject[])
-
       setTutors(
         ((tutorsResult.data || []) as Tutor[]).filter(
           (tutor) => Array.isArray(tutor.subjects)
         )
       )
-
       setAvailabilityRules((rulesResult.data || []) as AvailabilityRule[])
       setSessions((sessionsResult.data || []) as BookableSession[])
       setBookings((bookingsResult.data || []) as Booking[])
@@ -256,51 +303,45 @@ export default function BookPage() {
     void loadData()
   }, [loadData])
 
-  // Refresh the 24-hour cutoff as time passes.
   useEffect(() => {
     const interval = window.setInterval(() => setNow(new Date()), 60_000)
     return () => window.clearInterval(interval)
   }, [])
 
-  const bookedSessionIds = useMemo(() => {
-    return new Set(
-      bookings
-        .filter((booking) => !isCancelledBooking(booking.status))
-        .map((booking) => booking.session_id)
-    )
-  }, [bookings])
+  // Every booking row occupies its session, including cancelled bookings.
+  // Leaders handle exceptional rebooking cases separately.
+  const bookedSessionIds = useMemo(
+    () => new Set(bookings.map((booking) => booking.session_id)),
+    [bookings]
+  )
 
-  const rulesById = useMemo(() => {
-    return new Map(availabilityRules.map((rule) => [rule.id, rule]))
-  }, [availabilityRules])
+  const rulesById = useMemo(
+    () => new Map(availabilityRules.map((rule) => [rule.id, rule])),
+    [availabilityRules]
+  )
 
-  const tutorsById = useMemo(() => {
-    return new Map(tutors.map((tutor) => [tutor.id, tutor]))
-  }, [tutors])
+  const tutorsById = useMemo(
+    () => new Map(tutors.map((tutor) => [tutor.id, tutor])),
+    [tutors]
+  )
 
-  const subjectsById = useMemo(() => {
-    return new Map(subjects.map((subject) => [subject.id, subject]))
-  }, [subjects])
+  const subjectsById = useMemo(
+    () => new Map(subjects.map((subject) => [subject.id, subject])),
+    [subjects]
+  )
 
   const canSeeLfp =
     studentGrade === null ||
     studentGrade >= 9 ||
     showLfpSessions
 
-  /*
-   * Apply all session filters in one place.
-   * Subjects and tutors are then matched against this list,
-   * so a tutor is never shown solely because they have a
-   * session that fails the student's selected filters.
-   */
+  // First apply the filters that are independent of subject selection.
   const filteredSessions = useMemo(() => {
     return sessions.filter((session) => {
       if (bookedSessionIds.has(session.id)) return false
-
       if (!isSessionAtLeast24HoursAway(session, now)) return false
 
       if (session.session_type === 'lfp' && !canSeeLfp) return false
-
       if (!sessionTypes.includes(session.session_type)) return false
 
       if (dateFrom && session.session_date < dateFrom) return false
@@ -352,17 +393,18 @@ export default function BookPage() {
 
       return (
         subject.name.toLowerCase().includes(query) ||
-        (SUBJECT_GROUPS.find((group) => group.type === subject.type)?.label
-          .toLowerCase()
-          .includes(query) ?? false)
+        (SUBJECT_GROUPS.find((group) => group.type === subject.type)
+          ?.label.toLowerCase().includes(query) ?? false)
       )
     })
   }, [subjects, search])
 
-  const tutorsForSubject = useMemo(() => {
+  // Build the tutor results once. These results are used for both the tutor
+  // list and the subject-specific session count.
+  const tutorsForSubject = useMemo<TutorResult[]>(() => {
     if (!selectedSubject) return []
 
-    const matchingTutorSessions = new Map<string, BookableSession[]>()
+    const matching = new Map<string, BookableSession[]>()
 
     for (const session of filteredSessions) {
       const rule = rulesById.get(session.availability_rule_id)
@@ -371,26 +413,31 @@ export default function BookPage() {
       const tutor = tutorsById.get(rule.tutor_id)
       if (!tutor || !tutor.subjects?.includes(selectedSubject)) continue
 
-      const existing = matchingTutorSessions.get(tutor.id) || []
-      existing.push(session)
-      matchingTutorSessions.set(tutor.id, existing)
+      const list = matching.get(tutor.id) || []
+      list.push(session)
+      matching.set(tutor.id, list)
     }
 
-    return Array.from(matchingTutorSessions.entries())
+    return Array.from(matching.entries())
       .map(([tutorId, tutorSessions]) => ({
         tutor: tutorsById.get(tutorId)!,
         sessions: tutorSessions.sort(compareSessions),
       }))
       .sort((a, b) => {
-        const dateComparison = compareSessions(a.sessions[0], b.sessions[0])
-        return dateComparison || a.tutor.name.localeCompare(b.tutor.name)
+        const comparison = compareSessions(a.sessions[0], b.sessions[0])
+        return comparison || a.tutor.name.localeCompare(b.tutor.name)
       })
-  }, [
-    selectedSubject,
-    filteredSessions,
-    rulesById,
-    tutorsById,
-  ])
+  }, [selectedSubject, filteredSessions, rulesById, tutorsById])
+
+  // Count only sessions belonging to tutors who teach the selected subject.
+  const matchingSessionCount = useMemo(
+    () =>
+      tutorsForSubject.reduce(
+        (total, result) => total + result.sessions.length,
+        0
+      ),
+    [tutorsForSubject]
+  )
 
   const selectedSubjectData = selectedSubject
     ? subjectsById.get(selectedSubject)
@@ -409,8 +456,7 @@ export default function BookPage() {
 
     return filteredSessions
       .filter((session) => {
-        const rule = rulesById.get(session.availability_rule_id)
-        return rule?.tutor_id === selectedTutor
+        return rulesById.get(session.availability_rule_id)?.tutor_id === selectedTutor
       })
       .sort(compareSessions)
   }, [selectedTutor, filteredSessions, rulesById])
@@ -425,6 +471,7 @@ export default function BookPage() {
   function resetTutorSelection() {
     setSelectedTutor(null)
     setSelectedSession(null)
+    setExpandedRules(new Set())
     setSuccess('')
     setError('')
   }
@@ -437,23 +484,19 @@ export default function BookPage() {
   }
 
   function chooseTutor(tutorId: string) {
-    setSelectedTutor((current) =>
-      current === tutorId ? null : tutorId
-    )
+    setSelectedTutor((current) => current === tutorId ? null : tutorId)
     setSelectedSession(null)
+    setExpandedRules(new Set())
     setSuccess('')
     setError('')
   }
 
   function toggleSessionType(type: SessionType) {
-    setSessionTypes((current) => {
-      const next = current.includes(type)
+    setSessionTypes((current) =>
+      current.includes(type)
         ? current.filter((item) => item !== type)
         : [...current, type]
-
-      return next
-    })
-
+    )
     resetTutorSelection()
   }
 
@@ -463,7 +506,6 @@ export default function BookPage() {
         ? current.filter((item) => item !== day)
         : [...current, day]
     )
-
     resetTutorSelection()
   }
 
@@ -483,6 +525,17 @@ export default function BookPage() {
     resetTutorSelection()
   }
 
+  function toggleRule(ruleId: string) {
+    setExpandedRules((current) => {
+      const next = new Set(current)
+
+      if (next.has(ruleId)) next.delete(ruleId)
+      else next.add(ruleId)
+
+      return next
+    })
+  }
+
   async function bookSession() {
     setError('')
     setSuccess('')
@@ -492,9 +545,7 @@ export default function BookPage() {
       return
     }
 
-    if (
-      !isSessionAtLeast24HoursAway(selectedSessionData, new Date())
-    ) {
+    if (!isSessionAtLeast24HoursAway(selectedSessionData, new Date())) {
       setError(
         'Sessions must be booked at least 24 hours in advance. Please choose another time.'
       )
@@ -526,24 +577,21 @@ export default function BookPage() {
         return
       }
 
-      // Recheck the session to prevent two students booking it simultaneously.
-      const { data: existingBooking, error: checkError } = await supabase
+      // Any booking row, regardless of status, means the session is occupied.
+      const { data: existingBookings, error: checkError } = await supabase
         .from('bookings')
-        .select('id, status')
+        .select('id')
         .eq('session_id', selectedSessionData.id)
+        .limit(1)
 
       if (checkError) {
         setError(checkError.message)
         return
       }
 
-      if (
-        (existingBooking || []).some(
-          (item) => !isCancelledBooking(item.status)
-        )
-      ) {
+      if (existingBookings && existingBookings.length > 0) {
         setError(
-          'Sorry, another student just booked this session. Please choose another time.'
+          'Sorry, this session already has a booking. Please choose another time.'
         )
         setSelectedSession(null)
         await loadData(true)
@@ -562,13 +610,11 @@ export default function BookPage() {
       if (bookingError) {
         console.error('Booking failed:', bookingError)
 
-        if (bookingError.code === '23505') {
-          setError(
-            'Sorry, this session was just booked by another student. Please choose another time.'
-          )
-        } else {
-          setError(bookingError.message)
-        }
+        setError(
+          bookingError.code === '23505'
+            ? 'Sorry, this session was just booked by another student. Please choose another time.'
+            : bookingError.message
+        )
 
         await loadData(true)
         return
@@ -623,6 +669,7 @@ export default function BookPage() {
       setSuccess('Your tutoring session has been booked!')
       setSelectedSession(null)
       setSelectedTutor(null)
+      setExpandedRules(new Set())
 
       await loadData(true)
     } catch (err) {
@@ -637,9 +684,7 @@ export default function BookPage() {
     return (
       <DashboardLayout role="student">
         <div className="mx-auto max-w-6xl py-12 text-center">
-          <p className="text-muted-foreground">
-            Loading available tutoring sessions...
-          </p>
+          <p className="text-muted-foreground">Loading available tutoring sessions...</p>
         </div>
       </DashboardLayout>
     )
@@ -648,12 +693,9 @@ export default function BookPage() {
   return (
     <DashboardLayout role="student">
       <div className="mx-auto max-w-6xl space-y-6">
-        {/* Header */}
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">
-              Book a Tutor
-            </h1>
+            <h1 className="text-3xl font-bold tracking-tight">Book a Tutor</h1>
             <p className="mt-1 text-muted-foreground">
               Find a subject, choose a time that works, and book a peer tutor.
             </p>
@@ -669,46 +711,34 @@ export default function BookPage() {
         </header>
 
         {error && (
-          <div
-            role="alert"
-            className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
-          >
+          <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {error}
           </div>
         )}
 
         {success && (
-          <div
-            role="status"
-            className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700"
-          >
+          <div role="status" className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
             {success}
           </div>
         )}
 
-        {/* Search and subjects */}
+        {/* Subject picker */}
         <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
           <div className="border-b p-5 sm:p-6">
             <div className="flex items-start gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
                 1
               </div>
-
               <div className="min-w-0 flex-1">
-                <h2 className="text-lg font-semibold">
-                  What would you like help with?
-                </h2>
+                <h2 className="text-lg font-semibold">What would you like help with?</h2>
                 <p className="text-sm text-muted-foreground">
-                  Search for a subject or browse a category. Subjects are ordered
-                  by their configured sort number.
+                  Search or browse subjects. Hover over subjects with descriptions for more information.
                 </p>
               </div>
             </div>
 
             <div className="mt-5">
-              <label htmlFor="subject-search" className="sr-only">
-                Search subjects
-              </label>
+              <label htmlFor="subject-search" className="sr-only">Search subjects</label>
               <div className="relative">
                 <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted-foreground">
                   <SearchIcon />
@@ -741,9 +771,7 @@ export default function BookPage() {
                     resetTutorSelection()
                   }}
                   className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors ${
-                    showLfpSessions
-                      ? 'bg-primary'
-                      : 'bg-muted-foreground/30'
+                    showLfpSessions ? 'bg-primary' : 'bg-muted-foreground/30'
                   }`}
                 >
                   <span
@@ -757,9 +785,7 @@ export default function BookPage() {
           </div>
 
           {subjects.length === 0 ? (
-            <div className="p-6 text-sm text-muted-foreground">
-              No subjects are available yet.
-            </div>
+            <div className="p-6 text-sm text-muted-foreground">No subjects are available yet.</div>
           ) : filteredSubjects.length === 0 ? (
             <div className="p-6">
               <p className="font-medium">No subjects match your search.</p>
@@ -781,14 +807,14 @@ export default function BookPage() {
                 if (groupSubjects.length === 0) return null
 
                 return (
-                  <div key={group.type}>
+                  <div
+                    key={group.type}
+                    className={`rounded-xl border p-4 ${group.outline} ${group.container}`}
+                  >
                     <div className="mb-3 flex items-center justify-between gap-3">
-                      <h3 className="text-sm font-semibold">
-                        {group.label}
-                      </h3>
+                      <h3 className="text-sm font-bold uppercase tracking-wide">{group.label}</h3>
                       <span className="text-xs text-muted-foreground">
-                        {groupSubjects.length}{' '}
-                        {groupSubjects.length === 1 ? 'subject' : 'subjects'}
+                        {groupSubjects.length} {groupSubjects.length === 1 ? 'subject' : 'subjects'}
                       </span>
                     </div>
 
@@ -801,22 +827,25 @@ export default function BookPage() {
                             key={subject.id}
                             type="button"
                             aria-pressed={isSelected}
+                            title={subject.description || undefined}
                             onClick={() => chooseSubject(subject.id)}
                             className={`flex min-h-14 items-center justify-between gap-3 rounded-xl border p-4 text-left transition ${
-                              isSelected
-                                ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                                : 'hover:border-primary/40 hover:bg-muted/30'
+                              isSelected ? group.selected : group.card
                             }`}
                           >
                             <span className="font-medium">{subject.name}</span>
-                            <span
-                              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${
-                                isSelected
-                                  ? 'bg-primary text-primary-foreground'
-                                  : 'bg-muted text-muted-foreground'
-                              }`}
-                            >
-                              {isSelected ? '✓' : '→'}
+                            <span className="flex shrink-0 items-center gap-2">
+                              {subject.description && (
+                                <span
+                                  aria-label="Subject description available"
+                                  className={`flex h-5 w-5 items-center justify-center rounded-full border text-xs ${
+                                    isSelected ? 'border-current' : 'border-current/40'
+                                  }`}
+                                >
+                                  i
+                                </span>
+                              )}
+                              <span className="text-sm">{isSelected ? '✓' : '→'}</span>
                             </span>
                           </button>
                         )
@@ -835,14 +864,11 @@ export default function BookPage() {
             <div>
               <h2 className="text-lg font-semibold">Find a time that works</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Only tutors with sessions matching these filters will appear.
+                Results update automatically when you change a filter.
               </p>
             </div>
-
             {activeFilterCount > 0 && (
-              <Button variant="ghost" size="sm" onClick={clearFilters}>
-                Clear filters
-              </Button>
+              <Button variant="ghost" size="sm" onClick={clearFilters}>Clear filters</Button>
             )}
           </div>
 
@@ -852,8 +878,7 @@ export default function BookPage() {
               <div className="flex flex-wrap gap-2">
                 {SESSION_TYPES.map((type) => {
                   const active = sessionTypes.includes(type)
-                  const hiddenLfp =
-                    type === 'lfp' && !canSeeLfp
+                  const hiddenLfp = type === 'lfp' && !canSeeLfp
 
                   return (
                     <button
@@ -867,24 +892,18 @@ export default function BookPage() {
                           : 'hover:border-primary/40 hover:bg-muted/30'
                       }`}
                     >
-                      {SESSION_LABELS[type]}
-                      {hiddenLfp ? ' (hidden for your grade)' : ''}
+                      {SESSION_LABELS[type]}{hiddenLfp ? ' (hidden for your grade)' : ''}
                     </button>
                   )
                 })}
               </div>
-
               {!canSeeLfp && sessionTypes.includes('lfp') && (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  LFP is selected, but its sessions remain hidden until you
-                  enable the LFP toggle above.
+                  Enable the LFP toggle above to include LFP sessions.
                 </p>
               )}
-
               {sessionTypes.length === 0 && (
-                <p className="mt-2 text-xs text-amber-700">
-                  Select at least one session location to see results.
-                </p>
+                <p className="mt-2 text-xs text-amber-700">Select at least one location.</p>
               )}
             </div>
 
@@ -893,7 +912,6 @@ export default function BookPage() {
               <div className="flex flex-wrap gap-2">
                 {WEEKDAYS.map((day) => {
                   const active = selectedDays.includes(day.value)
-
                   return (
                     <button
                       key={day.value}
@@ -932,60 +950,34 @@ export default function BookPage() {
               {showMoreFilters && (
                 <div className="mt-4 grid gap-4 sm:grid-cols-3">
                   <div>
-                    <label
-                      htmlFor="date-from"
-                      className="mb-2 block text-sm font-medium"
-                    >
-                      From date
-                    </label>
+                    <label htmlFor="date-from" className="mb-2 block text-sm font-medium">From date</label>
                     <input
                       id="date-from"
                       type="date"
                       min={formatLocalDate(now)}
                       max={dateTo || undefined}
                       value={dateFrom}
-                      onChange={(event) =>
-                        updateFilter(setDateFrom, event.target.value)
-                      }
+                      onChange={(event) => updateFilter(setDateFrom, event.target.value)}
                       className="h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none focus:border-primary"
                     />
                   </div>
-
                   <div>
-                    <label
-                      htmlFor="date-to"
-                      className="mb-2 block text-sm font-medium"
-                    >
-                      Through date
-                    </label>
+                    <label htmlFor="date-to" className="mb-2 block text-sm font-medium">Through date</label>
                     <input
                       id="date-to"
                       type="date"
                       min={dateFrom || formatLocalDate(now)}
                       value={dateTo}
-                      onChange={(event) =>
-                        updateFilter(setDateTo, event.target.value)
-                      }
+                      onChange={(event) => updateFilter(setDateTo, event.target.value)}
                       className="h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none focus:border-primary"
                     />
                   </div>
-
                   <div>
-                    <label
-                      htmlFor="time-of-day"
-                      className="mb-2 block text-sm font-medium"
-                    >
-                      Time of day
-                    </label>
+                    <label htmlFor="time-of-day" className="mb-2 block text-sm font-medium">Time of day</label>
                     <select
                       id="time-of-day"
                       value={timeFilter}
-                      onChange={(event) =>
-                        updateFilter(
-                          setTimeFilter,
-                          event.target.value as TimeFilter
-                        )
-                      }
+                      onChange={(event) => updateFilter(setTimeFilter, event.target.value as TimeFilter)}
                       className="h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none focus:border-primary"
                     >
                       <option value="any">Any time</option>
@@ -999,11 +991,18 @@ export default function BookPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 border-t pt-4 text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">
-                {filteredSessions.length}
-              </span>
-              matching available{' '}
-              {filteredSessions.length === 1 ? 'session' : 'sessions'}
+              {selectedSubjectData ? (
+                <>
+                  <span className="font-semibold text-foreground">{matchingSessionCount}</span>
+                  matching {matchingSessionCount === 1 ? 'session' : 'sessions'} for{' '}
+                  <span className="font-medium text-foreground">{selectedSubjectData.name}</span>
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold text-foreground">{filteredSessions.length}</span>
+                  available sessions across all subjects
+                </>
+              )}
               <span>·</span>
               Book at least 24 hours in advance
             </div>
@@ -1015,9 +1014,7 @@ export default function BookPage() {
           <div className="flex items-end justify-between gap-3">
             <div>
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
-                  2
-                </div>
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">2</div>
                 <h2 className="text-xl font-semibold">Available tutors</h2>
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
@@ -1026,11 +1023,9 @@ export default function BookPage() {
                   : 'Choose a subject above to find matching tutors.'}
               </p>
             </div>
-
             {selectedSubject && (
               <Badge variant="secondary">
-                {tutorsForSubject.length}{' '}
-                {tutorsForSubject.length === 1 ? 'tutor' : 'tutors'}
+                {tutorsForSubject.length} {tutorsForSubject.length === 1 ? 'tutor' : 'tutors'}
               </Badge>
             )}
           </div>
@@ -1038,29 +1033,17 @@ export default function BookPage() {
           {!selectedSubject ? (
             <div className="rounded-2xl border border-dashed p-8 text-center">
               <p className="font-medium">Choose a subject to get started</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Your tutor results will appear here.
-              </p>
+              <p className="mt-1 text-sm text-muted-foreground">Your tutor results will appear here.</p>
             </div>
           ) : tutorsForSubject.length === 0 ? (
             <div className="rounded-2xl border p-6">
-              <p className="font-medium">
-                No tutors match this subject and your current filters.
-              </p>
+              <p className="font-medium">No tutors match this subject and your current filters.</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Try a different location, day, or time range, or select another
-                subject. You can also check back later.
+                Try a different location, day, or time range, or select another subject.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
-                <Button variant="outline" onClick={clearFilters}>
-                  Clear filters
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setSelectedSubject(null)}
-                >
-                  Choose another subject
-                </Button>
+                <Button variant="outline" onClick={clearFilters}>Clear filters</Button>
+                <Button variant="outline" onClick={() => setSelectedSubject(null)}>Choose another subject</Button>
               </div>
             </div>
           ) : (
@@ -1072,6 +1055,7 @@ export default function BookPage() {
                   .filter((subject): subject is Subject => Boolean(subject))
 
                 const nextSession = tutorSessions[0]
+                const sessionsByRule = groupSessionsByRule(tutorSessions)
 
                 return (
                   <article
@@ -1095,36 +1079,37 @@ export default function BookPage() {
                         </div>
 
                         <div className="mt-3 flex flex-wrap gap-2">
-                          {tutorSubjects.map((subject) => (
-                            <Badge key={subject.id} variant="secondary">
-                              {subject.name}
-                            </Badge>
-                          ))}
+                          {tutorSubjects.map((subject) => {
+                            const group = SUBJECT_GROUPS.find((item) => item.type === subject.type)
+                            return (
+                              <span
+                                key={subject.id}
+                                className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
+                                  group?.tutorCard || 'border-gray-200 bg-gray-50 text-gray-800'
+                                }`}
+                              >
+                                {subject.name}
+                              </span>
+                            )
+                          })}
                         </div>
 
                         <p className="mt-3 text-sm text-muted-foreground">
                           Next available:{' '}
                           <span className="font-medium text-foreground">
-                            {formatWeekdayLong(nextSession.session_date)},{' '}
-                            {formatShortDate(nextSession.session_date)} at{' '}
-                            {formatTime(nextSession.start_time)}
+                            {formatWeekdayLong(nextSession.session_date)}, {formatShortDate(nextSession.session_date)} at {formatTime(nextSession.start_time)}
                           </span>
                         </p>
                       </div>
 
                       <div className="flex shrink-0 items-center justify-between gap-4 sm:justify-end">
                         <div className="text-left sm:text-right">
-                          <p className="font-semibold">
-                            {tutorSessions.length}{' '}
-                            {tutorSessions.length === 1 ? 'session' : 'sessions'}
-                          </p>
+                          <p className="font-semibold">{tutorSessions.length} {tutorSessions.length === 1 ? 'session' : 'sessions'}</p>
                           <p className="text-xs text-muted-foreground">
-                            match your filters
+                            across {sessionsByRule.length} {sessionsByRule.length === 1 ? 'availability rule' : 'availability rules'}
                           </p>
                         </div>
-                        <span className="text-lg text-muted-foreground">
-                          {expanded ? '−' : '+'}
-                        </span>
+                        <span className="text-lg text-muted-foreground">{expanded ? '−' : '+'}</span>
                       </div>
                     </button>
 
@@ -1133,62 +1118,83 @@ export default function BookPage() {
                         <div className="mb-4">
                           <h4 className="font-semibold">Choose a session</h4>
                           <p className="mt-1 text-sm text-muted-foreground">
-                            Select an available time below.
+                            Recurring sessions are grouped by availability rule. Expand a group to see its dates.
                           </p>
                         </div>
 
-                        <div className="space-y-5">
-                          {groupSessionsByDate(tutorSessions).map(
-                            ({ date, sessions: dateSessions }) => (
-                              <div key={date}>
-                                <h5 className="mb-3 text-sm font-medium">
-                                  {formatDate(date)}
-                                </h5>
+                        <div className="space-y-3">
+                          {sessionsByRule.map((group) => {
+                            const ruleExpanded = expandedRules.has(group.ruleId)
+                            const first = group.sessions[0]
+                            const last = group.sessions[group.sessions.length - 1]
+                            const sessionType = first.session_type
 
-                                <div className="grid gap-3 sm:grid-cols-2">
-                                  {dateSessions.map((session) => {
-                                    const selected = selectedSession === session.id
+                            return (
+                              <div key={group.ruleId} className="overflow-hidden rounded-xl border bg-white">
+                                <button
+                                  type="button"
+                                  aria-expanded={ruleExpanded}
+                                  onClick={() => toggleRule(group.ruleId)}
+                                  className="flex w-full flex-col gap-3 p-4 text-left transition hover:bg-muted/20 sm:flex-row sm:items-center sm:justify-between"
+                                >
+                                  <div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="font-semibold">
+                                        {SESSION_LABELS[sessionType]} · {formatTime(first.start_time)}–{formatTime(first.end_time)}
+                                      </span>
+                                      <Badge variant="secondary">{group.sessions.length} {group.sessions.length === 1 ? 'date' : 'dates'}</Badge>
+                                    </div>
+                                    <p className="mt-1 text-sm text-muted-foreground">
+                                      {formatShortDate(first.session_date)}
+                                      {first.session_date !== last.session_date && ` – ${formatShortDate(last.session_date)}`}
+                                      {' · '}{formatWeekdayLong(first.session_date)}
+                                    </p>
+                                  </div>
+                                  <span className="shrink-0 text-sm font-medium text-primary">
+                                    {ruleExpanded ? 'Hide dates −' : 'View dates +'}
+                                  </span>
+                                </button>
 
-                                    return (
-                                      <button
-                                        key={session.id}
-                                        type="button"
-                                        aria-pressed={selected}
-                                        onClick={() => {
-                                          setSelectedSession(session.id)
-                                          setSuccess('')
-                                          setError('')
-                                        }}
-                                        className={`rounded-xl border p-4 text-left transition ${
-                                          selected
-                                            ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                                            : 'bg-white hover:border-primary/40'
-                                        }`}
-                                      >
-                                        <div className="flex items-start justify-between gap-3">
-                                          <div>
-                                            <p className="font-semibold">
-                                              {formatTime(session.start_time)} –{' '}
-                                              {formatTime(session.end_time)}
-                                            </p>
-                                            <p className="mt-1 text-xs text-muted-foreground">
-                                              {SESSION_DESCRIPTIONS[session.session_type]}
-                                            </p>
-                                          </div>
+                                {ruleExpanded && (
+                                  <div className="border-t bg-muted/10 p-4">
+                                    <div className="grid gap-2 sm:grid-cols-2">
+                                      {group.sessions.map((session) => {
+                                        const selected = selectedSession === session.id
 
-                                          <Badge
-                                            variant={selected ? 'default' : 'secondary'}
+                                        return (
+                                          <button
+                                            key={session.id}
+                                            type="button"
+                                            aria-pressed={selected}
+                                            onClick={() => {
+                                              setSelectedSession(session.id)
+                                              setSuccess('')
+                                              setError('')
+                                            }}
+                                            className={`rounded-xl border p-3 text-left transition ${
+                                              selected
+                                                ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                                                : 'bg-white hover:border-primary/40'
+                                            }`}
                                           >
-                                            {SESSION_LABELS[session.session_type]}
-                                          </Badge>
-                                        </div>
-                                      </button>
-                                    )
-                                  })}
-                                </div>
+                                            <div className="flex items-center justify-between gap-3">
+                                              <div>
+                                                <p className="font-semibold">{formatDate(session.session_date)}</p>
+                                                <p className="mt-1 text-sm text-muted-foreground">
+                                                  {formatTime(session.start_time)} – {formatTime(session.end_time)}
+                                                </p>
+                                              </div>
+                                              {selected && <Badge>Selected</Badge>}
+                                            </div>
+                                          </button>
+                                        )
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             )
-                          )}
+                          })}
                         </div>
                       </div>
                     )}
@@ -1203,31 +1209,22 @@ export default function BookPage() {
         {selectedSessionData && selectedTutorData && selectedSubjectData && (
           <section className="rounded-2xl border bg-white p-5 shadow-sm sm:p-6">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
-                3
-              </div>
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">3</div>
               <div>
                 <h2 className="text-lg font-semibold">Confirm your session</h2>
-                <p className="text-sm text-muted-foreground">
-                  Review the details before booking.
-                </p>
+                <p className="text-sm text-muted-foreground">Review the details before booking.</p>
               </div>
             </div>
 
             <div className="mt-5 rounded-xl bg-muted/30 p-5">
               <div className="flex flex-wrap gap-2">
-                <Badge>
-                  {SESSION_LABELS[selectedSessionData.session_type]}
-                </Badge>
+                <Badge>{SESSION_LABELS[selectedSessionData.session_type]}</Badge>
                 <Badge variant="secondary">{selectedSubjectData.name}</Badge>
               </div>
 
-              <p className="mt-4 text-xl font-semibold">
-                {formatDate(selectedSessionData.session_date)}
-              </p>
+              <p className="mt-4 text-xl font-semibold">{formatDate(selectedSessionData.session_date)}</p>
               <p className="mt-1 text-lg">
-                {formatTime(selectedSessionData.start_time)} –{' '}
-                {formatTime(selectedSessionData.end_time)}
+                {formatTime(selectedSessionData.start_time)} – {formatTime(selectedSessionData.end_time)}
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
                 {SESSION_DESCRIPTIONS[selectedSessionData.session_type]}
@@ -1240,19 +1237,10 @@ export default function BookPage() {
             </div>
 
             <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-              <Button
-                className="sm:min-w-48"
-                onClick={() => void bookSession()}
-                disabled={booking}
-              >
+              <Button className="sm:min-w-48" onClick={() => void bookSession()} disabled={booking}>
                 {booking ? 'Booking...' : 'Confirm Booking'}
               </Button>
-
-              <Button
-                variant="outline"
-                onClick={() => setSelectedSession(null)}
-                disabled={booking}
-              >
+              <Button variant="outline" onClick={() => setSelectedSession(null)} disabled={booking}>
                 Choose a Different Time
               </Button>
             </div>
@@ -1263,50 +1251,35 @@ export default function BookPage() {
   )
 }
 
-/* -------------------------------------------------------------------------- */
-/* Helpers                                                                    */
-/* -------------------------------------------------------------------------- */
+/* Helpers */
 
-function isCancelledBooking(status: string | null | undefined) {
-  const normalized = status?.toLowerCase().trim()
-  return normalized === 'cancelled' || normalized === 'canceled'
+function groupSessionsByRule(sessions: BookableSession[]) {
+  const groups = new Map<string, BookableSession[]>()
+
+  for (const session of [...sessions].sort(compareSessions)) {
+    const existing = groups.get(session.availability_rule_id) || []
+    existing.push(session)
+    groups.set(session.availability_rule_id, existing)
+  }
+
+  return Array.from(groups.entries()).map(([ruleId, ruleSessions]) => ({
+    ruleId,
+    sessions: ruleSessions,
+  }))
 }
 
 function isSessionAtLeast24HoursAway(
   session: Pick<BookableSession, 'session_date' | 'start_time'>,
   referenceDate: Date = new Date()
 ) {
-  const sessionStart = new Date(
-    `${session.session_date}T${session.start_time}`
-  )
+  const sessionStart = new Date(`${session.session_date}T${session.start_time}`)
 
-  return (
-    sessionStart.getTime() - referenceDate.getTime() >=
-    24 * 60 * 60 * 1000
-  )
+  return sessionStart.getTime() - referenceDate.getTime() >= 24 * 60 * 60 * 1000
 }
 
 function compareSessions(a: BookableSession, b: BookableSession) {
   const dateComparison = a.session_date.localeCompare(b.session_date)
-
-  if (dateComparison !== 0) return dateComparison
-
-  return a.start_time.localeCompare(b.start_time)
-}
-
-function groupSessionsByDate(sessions: BookableSession[]) {
-  const groups = new Map<string, BookableSession[]>()
-
-  for (const session of [...sessions].sort(compareSessions)) {
-    const current = groups.get(session.session_date) || []
-    current.push(session)
-    groups.set(session.session_date, current)
-  }
-
-  return Array.from(groups.entries()).map(([date, dateSessions]) => ({
-    date,
-    sessions: dateSessions,
-  }))
+  return dateComparison !== 0 ? dateComparison : a.start_time.localeCompare(b.start_time)
 }
 
 function timeToMinutes(time: string) {
@@ -1318,13 +1291,11 @@ function formatLocalDate(date: Date) {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
-
   return `${year}-${month}-${day}`
 }
 
 function formatTime(time: string) {
   const [hours, minutes] = time.split(':').map(Number)
-
   const date = new Date()
   date.setHours(hours, minutes, 0, 0)
 
