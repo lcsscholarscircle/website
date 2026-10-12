@@ -38,6 +38,18 @@ type Tutor = {
 type AvailabilityRule = {
   id: string
   tutor_id: string
+  day_of_week: number
+  start_time: string
+  end_time: string
+  start_date: string
+  end_date: string | null
+  session_type: SessionType
+  schedule_window_id: string | null
+}
+
+type ScheduleWindow = {
+  id: string
+  name: string
 }
 
 type BookableSession = {
@@ -152,7 +164,7 @@ const WEEKDAYS = [
   { value: 0, label: 'Sun' },
 ]
 
-type TimeFilter = 'any' | 'morning' | 'afternoon' | 'evening'
+type TimeFilter = 'any' | 'afternoon' | 'evening'
 
 export default function BookPage() {
   const [subjects, setSubjects] = useState<Subject[]>([])
@@ -175,6 +187,9 @@ export default function BookPage() {
     'library',
     'virtual',
   ])
+
+  const [scheduleWindows, setScheduleWindows] = useState<ScheduleWindow[]>([])
+
   const [selectedDays, setSelectedDays] = useState<number[]>([])
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -224,6 +239,7 @@ export default function BookPage() {
         subjectsResult,
         tutorsResult,
         rulesResult,
+        scheduleWindowsResult,
         sessionsResult,
         bookingsResult,
       ] = await Promise.all([
@@ -247,9 +263,23 @@ export default function BookPage() {
 
         supabase
           .from('availability_rules')
-          .select('id, tutor_id')
+          .select(`
+            id,
+            tutor_id,
+            day_of_week,
+            start_time,
+            end_time,
+            start_date,
+            end_date,
+            session_type,
+            schedule_window_id
+          `)
           .eq('active', true),
 
+        supabase
+          .from('schedule_windows')
+          .select('id, name'),
+          
         supabase
           .from('bookable_sessions')
           .select(`
@@ -276,6 +306,7 @@ export default function BookPage() {
         subjectsResult.error,
         tutorsResult.error,
         rulesResult.error,
+        scheduleWindowsResult.error,
         sessionsResult.error,
         bookingsResult.error,
       ].filter(Boolean)
@@ -297,6 +328,9 @@ export default function BookPage() {
         )
       )
       setAvailabilityRules((rulesResult.data || []) as AvailabilityRule[])
+      setScheduleWindows(
+        (scheduleWindowsResult.data || []) as ScheduleWindow[]
+      )
       setSessions((sessionsResult.data || []) as BookableSession[])
       setBookings((bookingsResult.data || []) as Booking[])
     } catch (err) {
@@ -334,6 +368,11 @@ export default function BookPage() {
     [tutors]
   )
 
+  const scheduleWindowsById = useMemo(
+    () => new Map(scheduleWindows.map((window) => [window.id, window])),
+    [scheduleWindows]
+  )
+
   const subjectsById = useMemo(
     () => new Map(subjects.map((subject) => [subject.id, subject])),
     [subjects]
@@ -367,8 +406,6 @@ export default function BookPage() {
       if (timeFilter !== 'any') {
         const start = timeToMinutes(session.start_time)
         const end = timeToMinutes(session.end_time)
-
-        if (timeFilter === 'morning' && start >= 12 * 60) return false
 
         if (
           timeFilter === 'afternoon' &&
@@ -847,7 +884,20 @@ export default function BookPage() {
                   role="switch"
                   aria-checked={showLfpSessions}
                   onClick={() => {
-                    setShowLfpSessions((current) => !current)
+                    const next = !showLfpSessions
+
+                    setShowLfpSessions(next)
+
+                    if (!next) {
+                      setSessionTypes((current) =>
+                        current.filter((type) => type !== 'lfp')
+                      )
+                    } else {
+                      setSessionTypes((current) =>
+                        current.includes('lfp') ? current : [...current, 'lfp']
+                      )
+                    }
+
                     resetTutorSelection()
                   }}
                   className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors ${
@@ -956,32 +1006,28 @@ export default function BookPage() {
             <div>
               <p className="mb-2 text-sm font-medium">Session location</p>
               <div className="flex flex-wrap gap-2">
-                {SESSION_TYPES.map((type) => {
-                  const active = sessionTypes.includes(type)
-                  const hiddenLfp = type === 'lfp' && !canSeeLfp
+                {SESSION_TYPES
+                  .filter((type) => type !== 'lfp' || canSeeLfp)
+                  .map((type) => {
+                    const active = sessionTypes.includes(type)
 
-                  return (
-                    <button
-                      key={type}
-                      type="button"
-                      aria-pressed={active}
-                      onClick={() => toggleSessionType(type)}
-                      className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
-                        active
-                          ? 'border-primary bg-primary text-primary-foreground'
-                          : 'hover:border-primary/40 hover:bg-muted/30'
-                      }`}
-                    >
-                      {SESSION_LABELS[type]}{hiddenLfp ? ' (hidden for your grade)' : ''}
-                    </button>
-                  )
-                })}
+                    return (
+                      <button
+                        key={type}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => toggleSessionType(type)}
+                        className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
+                          active
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'hover:border-primary/40 hover:bg-muted/30'
+                        }`}
+                      >
+                        {SESSION_LABELS[type]}
+                      </button>
+                    )
+                  })}
               </div>
-              {!canSeeLfp && sessionTypes.includes('lfp') && (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Enable the LFP toggle above to include LFP sessions.
-                </p>
-              )}
               {sessionTypes.length === 0 && (
                 <p className="mt-2 text-xs text-amber-700">Select at least one location.</p>
               )}
@@ -1061,7 +1107,6 @@ export default function BookPage() {
                       className="h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none focus:border-primary"
                     >
                       <option value="any">Any time</option>
-                      <option value="morning">Morning (before noon)</option>
                       <option value="afternoon">Afternoon (12–5 PM)</option>
                       <option value="evening">Evening (5 PM onward)</option>
                     </select>
@@ -1103,13 +1148,7 @@ export default function BookPage() {
                   : 'Choose a subject above to find matching tutors.'}
               </p>
             </div>
-            {selectedSubject && (
-              <Badge variant="secondary">
-                {tutorsForSubject.length} {tutorsForSubject.length === 1 ? 'tutor' : 'tutors'}
-              </Badge>
-            )}
           </div>
-{/* NEW */}
           <div className="mb-4 flex items-center justify-between gap-3">
             <p className="text-sm text-muted-foreground">
               {sortedTutors.length} available tutor
@@ -1245,7 +1284,16 @@ export default function BookPage() {
                             const ruleExpanded = expandedRules.has(group.ruleId)
                             const first = group.sessions[0]
                             const last = group.sessions[group.sessions.length - 1]
-                            const sessionType = first.session_type
+
+                            const rule = rulesById.get(group.ruleId)
+
+                            const sessionType = rule?.session_type ?? first.session_type
+
+                            const scheduleWindow = rule?.schedule_window_id
+                              ? scheduleWindowsById.get(rule.schedule_window_id)
+                              : undefined
+
+                            const windowName = scheduleWindow?.name
 
                             return (
                               <div key={group.ruleId} className="overflow-hidden rounded-xl border bg-white">
@@ -1256,29 +1304,56 @@ export default function BookPage() {
                                   className="flex w-full flex-col gap-3 p-4 text-left transition hover:bg-muted/20 sm:flex-row sm:items-center sm:justify-between"
                                 >
                                   <div>
+                                    {scheduleWindow?.name && (
+                                      <p className="mb-1 font-bold">
+                                        {scheduleWindow.name}
+                                      </p>
+                                    )}
+
                                     <div className="flex flex-wrap items-center gap-2">
                                       <span className="font-semibold">
-                                        {SESSION_LABELS[sessionType]} · {formatTime(first.start_time)}–{formatTime(first.end_time)}
+                                        {SESSION_LABELS[sessionType]} ·{' '}
+                                        {formatTime(rule?.start_time ?? first.start_time)}–
+                                        {formatTime(rule?.end_time ?? first.end_time)}
                                       </span>
-                                      <Badge variant="secondary">{group.sessions.length} {group.sessions.length === 1 ? 'date' : 'dates'}</Badge>
+
+                                      <Badge variant="secondary">
+                                        {group.sessions.length}{' '}
+                                        {group.sessions.length === 1 ? 'session' : 'sessions'}
+                                      </Badge>
                                     </div>
+
                                     <p className="mt-1 text-sm text-muted-foreground">
+                                      {rule
+                                        ? WEEKDAYS.find((day) => day.value === rule.day_of_week)?.label
+                                            ? `${formatRuleWeekday(rule.day_of_week)}`
+                                            : ''
+                                        : formatWeekdayLong(first.session_date)}
+                                      {' · '}
                                       {formatShortDate(first.session_date)}
-                                      {first.session_date !== last.session_date && ` – ${formatShortDate(last.session_date)}`}
-                                      {' · '}{formatWeekdayLong(first.session_date)}
+                                      {first.session_date !== last.session_date &&
+                                        ` – ${formatShortDate(last.session_date)}`}
                                     </p>
+                                  </div>
+                                  <div className="mt-3 rounded-lg border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                                    {group.sessions[0].session_type === 'lfp'
+                                      ? 'Takes place on the LFP Campus.'
+                                      : group.sessions[0].session_type === 'library'
+                                        ? 'Takes place across the street from LFP, at the Filipe de Neve Library.'
+                                        : 'Takes place online, via Google Meet.'}
                                   </div>
                                   <span className="shrink-0 text-sm font-medium text-primary">
                                     {ruleExpanded ? 'Hide dates −' : 'View dates +'}
                                   </span>
                                 </button>
-
                                 {ruleExpanded && (
                                   <div className="border-t bg-muted/10 p-4">
                                     <div className="grid gap-2 sm:grid-cols-2">
                                       {group.sessions.map((session) => {
                                         const selected = selectedSession === session.id
-
+                                        const sessionWindow = session.schedule_window_id
+                                          ? scheduleWindowsById.get(session.schedule_window_id)
+                                          : undefined
                                         return (
                                           <button
                                             key={session.id}
@@ -1297,7 +1372,16 @@ export default function BookPage() {
                                           >
                                             <div className="flex items-center justify-between gap-3">
                                               <div>
-                                                <p className="font-semibold">{formatDate(session.session_date)}</p>
+                                                {sessionWindow?.name && (
+                                                  <p className="mb-1 text-sm font-semibold text-primary">
+                                                    {sessionWindow.name}
+                                                  </p>
+                                                )}
+
+                                                <p className="font-semibold">
+                                                  {formatDate(session.session_date)}
+                                                </p>
+
                                                 <p className="mt-1 text-sm text-muted-foreground">
                                                   {formatTime(session.start_time)} – {formatTime(session.end_time)}
                                                 </p>
@@ -1370,6 +1454,18 @@ export default function BookPage() {
 }
 
 /* Helpers */
+
+function formatRuleWeekday(dayOfWeek: number) {
+  return [
+    'Sunday',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+  ][dayOfWeek] ?? 'Unknown day'
+}
 
 function groupSessionsByRule(sessions: BookableSession[]) {
   const groups = new Map<string, BookableSession[]>()
