@@ -438,6 +438,81 @@ export default function BookPage() {
       })
   }, [selectedSubject, filteredSessions, rulesById, tutorsById])
 
+  type TutorSortOption =
+    | 'next_available'
+    | 'session_times'
+    | 'sessions'
+    | 'subjects'
+
+  const [tutorSortBy, setTutorSortBy] =
+    useState<TutorSortOption>('next_available')
+
+  const sortedTutors = useMemo<TutorResult[]>(() => {
+    const metrics = tutorsForSubject.map((result) => {
+      const tutor = result.tutor
+      const tutorSessions = result.sessions
+
+      // The sessions are already filtered for this tutor, subject,
+      // bookings, 24-hour cutoff, and all active filters.
+      const nextAvailable = tutorSessions.length > 0
+        ? new Date(
+            `${tutorSessions[0].session_date}T${tutorSessions[0].start_time}`
+          ).getTime()
+        : Infinity
+
+      // Count individual available booking slots.
+      const sessionTimeCount = tutorSessions.length
+
+      // Count distinct dates on which the tutor has availability.
+      const sessionCount = new Set(
+        tutorSessions.map((session) => session.session_date)
+      ).size
+
+      // Count all distinct subjects taught by this tutor.
+      const subjectCount = new Set(tutor.subjects ?? []).size
+
+      return {
+        result,
+        nextAvailable,
+        sessionTimeCount,
+        sessionCount,
+        subjectCount,
+      }
+    })
+
+    metrics.sort((a, b) => {
+      let difference = 0
+
+      switch (tutorSortBy) {
+        case 'next_available':
+          difference = a.nextAvailable - b.nextAvailable
+          break
+
+        case 'session_times':
+          difference = b.sessionTimeCount - a.sessionTimeCount
+          break
+
+        case 'sessions':
+          difference = b.sessionCount - a.sessionCount
+          break
+
+        case 'subjects':
+          difference = b.subjectCount - a.subjectCount
+          break
+      }
+
+      // If the metric is tied, sort alphabetically.
+      if (difference === 0) {
+        return a.result.tutor.name.localeCompare(b.result.tutor.name)
+      }
+
+      return difference
+    })
+
+    // Keep the TutorResult shape expected by the tutor-card rendering.
+    return metrics.map((item) => item.result)
+  }, [tutorsForSubject, tutorSortBy])
+
   // Count only sessions belonging to tutors who teach the selected subject.
   const matchingSessionCount = useMemo(
     () =>
@@ -1038,6 +1113,36 @@ export default function BookPage() {
               </Badge>
             )}
           </div>
+{/* NEW */}
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              {sortedTutors.length} available tutor
+              {sortedTutors.length === 1 ? '' : 's'}
+            </p>
+
+            <div className="flex items-center gap-2">
+              <label
+                htmlFor="tutor-sort"
+                className="whitespace-nowrap text-sm font-medium"
+              >
+                Sort by
+              </label>
+
+              <select
+                id="tutor-sort"
+                value={tutorSortBy}
+                onChange={(event) =>
+                  setTutorSortBy(event.target.value as TutorSortOption)
+                }
+                className="rounded-md border bg-background px-3 py-2 text-sm"
+              >
+                <option value="next_available">Next available</option>
+                <option value="session_times">Most session times</option>
+                <option value="sessions">Most session dates</option>
+                <option value="subjects">Most subjects</option>
+              </select>
+            </div>
+          </div>
 
           {!selectedSubject ? (
             <div className="rounded-2xl border border-dashed p-8 text-center">
@@ -1057,7 +1162,7 @@ export default function BookPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {tutorsForSubject.map(({ tutor, sessions: tutorSessions }) => {
+              {sortedTutors.map(({ tutor, sessions: tutorSessions }) => {
                 const expanded = selectedTutor === tutor.id
                 const tutorSubjects = (tutor.subjects || [])
                   .map((id) => subjectsById.get(id))
