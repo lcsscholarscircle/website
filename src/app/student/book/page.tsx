@@ -1,6 +1,7 @@
+
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import DashboardLayout from '@/components/dashboard-layout'
 import { supabase } from '@/lib/supabase'
 
@@ -13,11 +14,15 @@ type SubjectType =
   | 'science'
   | 'history'
   | 'spanish'
+  | 'college'
+
+type SessionType = 'lfp' | 'virtual' | 'library'
 
 type Subject = {
   id: string
   name: string
   type: SubjectType
+  sort: number | null
 }
 
 type Tutor = {
@@ -26,6 +31,7 @@ type Tutor = {
   email: string
   grade: number | null
   subjects: string[] | null
+  role: string
 }
 
 type AvailabilityRule = {
@@ -37,7 +43,7 @@ type BookableSession = {
   id: string
   availability_rule_id: string
   schedule_window_id: string | null
-  session_type: 'lfp' | 'virtual' | 'library'
+  session_type: SessionType
   session_date: string
   start_time: string
   end_time: string
@@ -49,694 +55,445 @@ type Booking = {
   session_id: string
   student_id: string
   tutor_id: string
+  status: string
 }
 
-const sessionTypeLabels = {
-  lfp: 'LFP',
-  virtual: 'Virtual',
-  library: 'Library',
-}
-
-const sessionTypeDescriptions = {
-  lfp: 'On campus, during school hours.',
-  virtual: 'Online, via Google Meet.',
-  library: 'At the Filipe de Neve library, across from LFP.',
-}
-
-const subjectGroups: {
-  type: SubjectType
-  label: string
-  containerClass: string
-  headerClass: string
-  buttonSelectedClass: string
-  buttonClass: string
-}[] = [
-  {
-    type: 'math',
-    label: 'Math',
-    containerClass: 'border-red-200 bg-red-50/70',
-    headerClass: 'text-red-800',
-    buttonSelectedClass:
-      'border-red-600 bg-red-600 text-white hover:bg-red-700 hover:text-white',
-    buttonClass:
-      'border-red-200 bg-white text-red-900 hover:border-red-400 hover:bg-red-100',
-  },
-  {
-    type: 'english',
-    label: 'English',
-    containerClass: 'border-blue-200 bg-blue-50/70',
-    headerClass: 'text-blue-800',
-    buttonSelectedClass:
-      'border-blue-600 bg-blue-600 text-white hover:bg-blue-700 hover:text-white',
-    buttonClass:
-      'border-blue-200 bg-white text-blue-900 hover:border-blue-400 hover:bg-blue-100',
-  },
-  {
-    type: 'science',
-    label: 'Science',
-    containerClass: 'border-green-200 bg-green-50/70',
-    headerClass: 'text-green-800',
-    buttonSelectedClass:
-      'border-green-600 bg-green-600 text-white hover:bg-green-700 hover:text-white',
-    buttonClass:
-      'border-green-200 bg-white text-green-900 hover:border-green-400 hover:bg-green-100',
-  },
-  {
-    type: 'history',
-    label: 'History',
-    containerClass: 'border-yellow-200 bg-yellow-50/70',
-    headerClass: 'text-yellow-800',
-    buttonSelectedClass:
-      'border-yellow-500 bg-yellow-500 text-white hover:bg-yellow-600 hover:text-white',
-    buttonClass:
-      'border-yellow-200 bg-white text-yellow-900 hover:border-yellow-400 hover:bg-yellow-100',
-  },
-  {
-    type: 'spanish',
-    label: 'Spanish',
-    containerClass: 'border-purple-200 bg-purple-50/70',
-    headerClass: 'text-purple-800',
-    buttonSelectedClass:
-      'border-purple-600 bg-purple-600 text-white hover:bg-purple-700 hover:text-white',
-    buttonClass:
-      'border-purple-200 bg-white text-purple-900 hover:border-purple-400 hover:bg-purple-100',
-  },
+const SESSION_TYPES: SessionType[] = [
+  'lfp',
+  'library',
+  'virtual',
 ]
 
+const SESSION_LABELS: Record<SessionType, string> = {
+  lfp: 'LFP',
+  library: 'Library',
+  virtual: 'Virtual',
+}
+
+const SESSION_DESCRIPTIONS: Record<SessionType, string> = {
+  lfp: 'On campus, during school hours.',
+  library: 'At the Filipe de Neve library, across from LFP.',
+  virtual: 'Online, via Google Meet.',
+}
+
+const SUBJECT_GROUPS: {
+  type: SubjectType
+  label: string
+  color: string
+}[] = [
+  { type: 'math', label: 'Math', color: 'border-red-200 bg-red-50 text-red-800' },
+  { type: 'english', label: 'English', color: 'border-blue-200 bg-blue-50 text-blue-800' },
+  { type: 'science', label: 'Science', color: 'border-green-200 bg-green-50 text-green-800' },
+  { type: 'history', label: 'History', color: 'border-yellow-200 bg-yellow-50 text-yellow-800' },
+  { type: 'spanish', label: 'Spanish', color: 'border-purple-200 bg-purple-50 text-purple-800' },
+  { type: 'college', label: 'College Prep', color: 'border-indigo-200 bg-indigo-50 text-indigo-800' },
+]
+
+const WEEKDAYS = [
+  { value: 1, label: 'Mon' },
+  { value: 2, label: 'Tue' },
+  { value: 3, label: 'Wed' },
+  { value: 4, label: 'Thu' },
+  { value: 5, label: 'Fri' },
+  { value: 6, label: 'Sat' },
+  { value: 0, label: 'Sun' },
+]
+
+type TimeFilter = 'any' | 'morning' | 'afternoon' | 'evening'
+
 export default function BookPage() {
-  const [subjects, setSubjects] =
-    useState<Subject[]>([])
+  const [subjects, setSubjects] = useState<Subject[]>([])
+  const [tutors, setTutors] = useState<Tutor[]>([])
+  const [availabilityRules, setAvailabilityRules] = useState<AvailabilityRule[]>([])
+  const [sessions, setSessions] = useState<BookableSession[]>([])
+  const [bookings, setBookings] = useState<Booking[]>([])
 
-  const [tutors, setTutors] =
-    useState<Tutor[]>([])
+  const [studentGrade, setStudentGrade] = useState<number | null>(null)
+  const [studentLoaded, setStudentLoaded] = useState(false)
+  const [showLfpSessions, setShowLfpSessions] = useState(false)
 
-  const [availabilityRules, setAvailabilityRules] =
-    useState<AvailabilityRule[]>([])
+  const [search, setSearch] = useState('')
+  const [selectedSubject, setSelectedSubject] = useState<string | null>(null)
+  const [selectedTutor, setSelectedTutor] = useState<string | null>(null)
+  const [selectedSession, setSelectedSession] = useState<string | null>(null)
 
-  const [sessions, setSessions] =
-    useState<BookableSession[]>([])
+  const [sessionTypes, setSessionTypes] = useState<SessionType[]>([
+    'lfp',
+    'library',
+    'virtual',
+  ])
+  const [selectedDays, setSelectedDays] = useState<number[]>([])
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>('any')
+  const [showMoreFilters, setShowMoreFilters] = useState(false)
 
-  const [bookings, setBookings] =
-    useState<Booking[]>([])
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [booking, setBooking] = useState(false)
+  const [now, setNow] = useState(() => new Date())
 
-  const [selectedSubject, setSelectedSubject] =
-    useState<string | null>(null)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
 
-  const [selectedTutor, setSelectedTutor] =
-    useState<string | null>(null)
+  const loadData = useCallback(async (background = false) => {
+    if (background) {
+      setRefreshing(true)
+    } else {
+      setLoading(true)
+    }
 
-  const [selectedDate, setSelectedDate] =
-    useState<string | null>(null)
-
-  const [selectedSession, setSelectedSession] =
-    useState<string | null>(null)
-
-  const [studentGrade, setStudentGrade] =
-    useState<number | null>(null)
-
-  const [showLfpSessions, setShowLfpSessions] =
-    useState(true)
-
-  const [studentLoaded, setStudentLoaded] =
-    useState(false)
-
-  const [loading, setLoading] =
-    useState(true)
-
-  const [now, setNow] =
-    useState(() => new Date())
-
-  const [booking, setBooking] =
-    useState(false)
-
-  const [error, setError] =
-    useState('')
-
-  const [success, setSuccess] =
-    useState('')
-
-  async function loadData() {
-    setLoading(true)
     setError('')
 
-    const today =
-      formatLocalDate(new Date())
+    const today = formatLocalDate(new Date())
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser()
 
-    if (userError || !user) {
-      setError(
-        'You must be signed in to book a tutoring session.'
+      if (userError || !user) {
+        setError('You must be signed in to book a tutoring session.')
+        return
+      }
+
+      const [
+        profileResult,
+        subjectsResult,
+        tutorsResult,
+        rulesResult,
+        sessionsResult,
+        bookingsResult,
+      ] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('grade')
+          .eq('id', user.id)
+          .single(),
+
+        supabase
+          .from('subjects')
+          .select('id, name, type, sort')
+          .order('sort', { ascending: true, nullsFirst: false })
+          .order('name', { ascending: true }),
+
+        supabase
+          .from('profiles')
+          .select('id, name, email, grade, subjects, role')
+          .in('role', ['tutor', 'leader'])
+          .order('name'),
+
+        supabase
+          .from('availability_rules')
+          .select('id, tutor_id')
+          .eq('active', true),
+
+        supabase
+          .from('bookable_sessions')
+          .select(`
+            id,
+            availability_rule_id,
+            schedule_window_id,
+            session_type,
+            session_date,
+            start_time,
+            end_time,
+            slot_index
+          `)
+          .gte('session_date', today)
+          .order('session_date')
+          .order('start_time'),
+
+        supabase
+          .from('bookings')
+          .select('id, session_id, student_id, tutor_id, status'),
+      ])
+
+      const errors = [
+        profileResult.error,
+        subjectsResult.error,
+        tutorsResult.error,
+        rulesResult.error,
+        sessionsResult.error,
+        bookingsResult.error,
+      ].filter(Boolean)
+
+      if (errors.length > 0) {
+        console.error('Booking page load errors:', errors)
+        setError(errors[0]?.message || 'Unable to load booking information.')
+        return
+      }
+
+      setStudentGrade(profileResult.data?.grade ?? null)
+      setStudentLoaded(true)
+
+      // Students below grade 9 do not see LFP sessions by default.
+      // A NULL grade is treated as grade 9 or above.
+      setShowLfpSessions(false)
+
+      setSubjects((subjectsResult.data || []) as Subject[])
+
+      setTutors(
+        ((tutorsResult.data || []) as Tutor[]).filter(
+          (tutor) => Array.isArray(tutor.subjects)
+        )
       )
 
+      setAvailabilityRules((rulesResult.data || []) as AvailabilityRule[])
+      setSessions((sessionsResult.data || []) as BookableSession[])
+      setBookings((bookingsResult.data || []) as Booking[])
+    } catch (err) {
+      console.error('Unable to load booking page:', err)
+      setError('An unexpected error occurred while loading booking information.')
+    } finally {
       setLoading(false)
-      return
+      setRefreshing(false)
     }
-
-    const [
-      studentProfileResult,
-      subjectsResult,
-      tutorsResult,
-      availabilityResult,
-      sessionsResult,
-      bookingsResult,
-    ] = await Promise.all([
-      supabase
-        .from('profiles')
-        .select('grade')
-        .eq('id', user.id)
-        .single(),
-
-      supabase
-        .from('subjects')
-        .select('id, name, type')
-        .order('name'),
-
-      supabase
-        .from('profiles')
-        .select(
-          'id, name, email, grade, subjects, role'
-        )
-        .order('name'),
-
-      supabase
-        .from('availability_rules')
-        .select(
-          'id, tutor_id'
-        )
-        .eq('active', true),
-
-      supabase
-        .from('bookable_sessions')
-        .select(`
-          id,
-          availability_rule_id,
-          schedule_window_id,
-          session_type,
-          session_date,
-          start_time,
-          end_time,
-          slot_index
-        `)
-        .gte(
-          'session_date',
-          today
-        )
-        .order(
-          'session_date'
-        )
-        .order(
-          'start_time'
-        ),
-
-      supabase
-        .from('bookings')
-        .select(
-          'id, session_id, student_id, tutor_id'
-        ),
-    ])
-
-    if (studentProfileResult.error) {
-      console.error(
-        studentProfileResult.error
-      )
-
-      setError(
-        studentProfileResult.error.message
-      )
-
-      setLoading(false)
-      return
-    }
-
-    const grade =
-      studentProfileResult.data?.grade ?? null
-
-    setStudentGrade(grade)
-
-    setShowLfpSessions(false)
-
-    setStudentLoaded(true)
-
-    console.log(
-      'STUDENT PROFILE:',
-      studentProfileResult
-    )
-    console.log(
-      'TUTORS RESULT:',
-      tutorsResult
-    )
-    console.log(
-      'AVAILABILITY RESULT:',
-      availabilityResult
-    )
-    console.log(
-      'SESSIONS RESULT:',
-      sessionsResult
-    )
-    console.log(
-      'BOOKINGS RESULT:',
-      bookingsResult
-    )
-
-    const errors = [
-      studentProfileResult.error,
-      subjectsResult.error,
-      tutorsResult.error,
-      availabilityResult.error,
-      sessionsResult.error,
-      bookingsResult.error,
-    ].filter(Boolean)
-
-    if (errors.length > 0) {
-      console.error(errors)
-
-      setError(
-        errors[0]?.message ||
-          'Unable to load booking information.'
-      )
-    }
-
-    setSubjects(
-      subjectsResult.data || []
-    )
-
-    setTutors(
-      tutorsResult.data || []
-    )
-
-    setAvailabilityRules(
-      availabilityResult.data || []
-    )
-
-    setSessions(
-      sessionsResult.data || []
-    )
-
-    setBookings(
-      bookingsResult.data || []
-    )
-
-    setLoading(false)
-  }
-
-  useEffect(() => {
-    loadData()
   }, [])
 
-  /*
-   * Keep the current time fresh so sessions disappear from the
-   * booking page as soon as they enter the 24-hour window.
-   */
   useEffect(() => {
-    const interval = window.setInterval(() => {
-      setNow(new Date())
-    }, 60 * 1000)
+    void loadData()
+  }, [loadData])
 
+  // Refresh the 24-hour cutoff as time passes.
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(new Date()), 60_000)
     return () => window.clearInterval(interval)
   }, [])
 
-  /*
-   * Session IDs that are already occupied.
-   */
+  const bookedSessionIds = useMemo(() => {
+    return new Set(
+      bookings
+        .filter((booking) => !isCancelledBooking(booking.status))
+        .map((booking) => booking.session_id)
+    )
+  }, [bookings])
 
-  const bookedSessionIds =
-    useMemo(() => {
-      return new Set(
-        bookings.map(
-          (booking) =>
-            booking.session_id
-        )
-      )
-    }, [bookings])
+  const rulesById = useMemo(() => {
+    return new Map(availabilityRules.map((rule) => [rule.id, rule]))
+  }, [availabilityRules])
 
-  const filteredSessions =
-    useMemo(() => {
-      /*
-      * LFP sessions take place at LFP.
-      *
-      * Grade 9+ students can always see LFP
-      * sessions.
-      *
-      * Students below grade 9 can see LFP
-      * sessions only when the toggle is ON.
-      *
-      * Students with no grade are treated as
-      * grade 9+ and can always see LFP sessions.
-      */
+  const tutorsById = useMemo(() => {
+    return new Map(tutors.map((tutor) => [tutor.id, tutor]))
+  }, [tutors])
 
-      const canSeeLfp =
-        studentGrade === null ||
-        (
-          studentGrade >= 9 ||
-          showLfpSessions
-        )
+  const subjectsById = useMemo(() => {
+    return new Map(subjects.map((subject) => [subject.id, subject]))
+  }, [subjects])
 
-      return sessions.filter(
-        (session) => {
-          const isLfpSession =
-            session.session_type === 'lfp'
-
-          if (
-            isLfpSession &&
-            !canSeeLfp
-          ) {
-            return false
-          }
-
-          return isSessionAtLeast24HoursAway(
-            session,
-            now
-          )
-        }
-      )
-    }, [
-      sessions,
-      studentGrade,
-      showLfpSessions,
-      now,
-    ])
+  const canSeeLfp =
+    studentGrade === null ||
+    studentGrade >= 9 ||
+    showLfpSessions
 
   /*
-   * Tutor IDs that currently have at least one
-   * upcoming, unbooked session.
+   * Apply all session filters in one place.
+   * Subjects and tutors are then matched against this list,
+   * so a tutor is never shown solely because they have a
+   * session that fails the student's selected filters.
    */
+  const filteredSessions = useMemo(() => {
+    return sessions.filter((session) => {
+      if (bookedSessionIds.has(session.id)) return false
 
-  const tutorsWithAvailableSessions =
-    useMemo(() => {
-      const availableTutorIds =
-        new Set<string>()
+      if (!isSessionAtLeast24HoursAway(session, now)) return false
 
-      for (const session of filteredSessions) {
+      if (session.session_type === 'lfp' && !canSeeLfp) return false
+
+      if (!sessionTypes.includes(session.session_type)) return false
+
+      if (dateFrom && session.session_date < dateFrom) return false
+      if (dateTo && session.session_date > dateTo) return false
+
+      if (selectedDays.length > 0) {
+        const weekday = new Date(
+          `${session.session_date}T00:00:00`
+        ).getDay()
+
+        if (!selectedDays.includes(weekday)) return false
+      }
+
+      if (timeFilter !== 'any') {
+        const start = timeToMinutes(session.start_time)
+        const end = timeToMinutes(session.end_time)
+
+        if (timeFilter === 'morning' && start >= 12 * 60) return false
+
         if (
-          bookedSessionIds.has(session.id)
+          timeFilter === 'afternoon' &&
+          (end <= 12 * 60 || start >= 17 * 60)
         ) {
-          continue
+          return false
         }
 
-        const rule =
-          availabilityRules.find(
-            (rule) =>
-              rule.id ===
-              session.availability_rule_id
-          )
-
-        if (rule) {
-          availableTutorIds.add(
-            rule.tutor_id
-          )
-        }
+        if (timeFilter === 'evening' && end <= 17 * 60) return false
       }
 
-      return availableTutorIds
-    }, [
-      filteredSessions,
-      availabilityRules,
-      bookedSessionIds,
-    ])
-
-  /*
-   * Tutors who teach the selected subject.
-   */
-
-  const tutorsForSubject =
-    useMemo(() => {
-      if (!selectedSubject) {
-        return []
-      }
-
-      return tutors.filter(
-        (tutor) => {
-          return (
-            Array.isArray(
-              tutor.subjects
-            ) &&
-            tutor.subjects.includes(
-              selectedSubject
-            ) &&
-            tutorsWithAvailableSessions.has(
-              tutor.id
-            )
-          )
-        }
-      )
-    }, [
-      selectedSubject,
-      tutors,
-      tutorsWithAvailableSessions,
-    ])
-
-  /*
-   * Availability rules belonging to
-   * the selected tutor.
-   */
-
-  const selectedTutorRules =
-    useMemo(() => {
-      if (!selectedTutor) {
-        return []
-      }
-
-      return availabilityRules.filter(
-        (rule) =>
-          rule.tutor_id ===
-          selectedTutor
-      )
-    }, [
-      selectedTutor,
-      availabilityRules,
-    ])
-
-  /*
-   * All available sessions for the
-   * selected tutor.
-   */
-
-  const availableSessions =
-    useMemo(() => {
-      if (!selectedTutor) {
-        return []
-      }
-
-      const ruleIds =
-        selectedTutorRules.map(
-          (rule) => rule.id
-        )
-
-      return filteredSessions.filter(
-        (session) => {
-          return (
-            ruleIds.includes(
-              session.availability_rule_id
-            ) &&
-            !bookedSessionIds.has(
-              session.id
-            )
-          )
-        }
-      )
-    }, [
-      selectedTutor,
-      selectedTutorRules,
-      filteredSessions,
-      bookedSessionIds,
-    ])
-
-  /*
-   * Group available sessions by date.
-   */
-
-  const sessionsByDate =
-    useMemo(() => {
-      const grouped =
-        new Map<
-          string,
-          BookableSession[]
-        >()
-
-      for (
-        const session of
-          availableSessions
-      ) {
-        const existing =
-          grouped.get(
-            session.session_date
-          ) || []
-
-        existing.push(session)
-
-        grouped.set(
-          session.session_date,
-          existing
-        )
-      }
-
-      return Array.from(
-        grouped.entries()
-      ).map(
-        ([date, sessions]) => ({
-          date,
-          sessions,
-        })
-      )
-    }, [
-      availableSessions,
-    ])
-
-  /*
-   * Select the first available date
-   * when the tutor changes.
-   */
-
-  useEffect(() => {
-    if (
-      !selectedTutor ||
-      sessionsByDate.length === 0
-    ) {
-      setSelectedDate(null)
-      return
-    }
-
-    const stillExists =
-      sessionsByDate.some(
-        (group) =>
-          group.date ===
-          selectedDate
-      )
-
-    if (!stillExists) {
-      setSelectedDate(
-        sessionsByDate[0].date
-      )
-    }
+      return true
+    })
   }, [
-    selectedTutor,
-    sessionsByDate,
-    selectedDate,
+    sessions,
+    bookedSessionIds,
+    now,
+    canSeeLfp,
+    sessionTypes,
+    dateFrom,
+    dateTo,
+    selectedDays,
+    timeFilter,
   ])
 
-  /*
-   * Sessions for the selected date.
-   */
+  const filteredSubjects = useMemo(() => {
+    const query = search.trim().toLowerCase()
 
-  const sessionsForSelectedDate =
-    useMemo(() => {
-      if (!selectedDate) {
-        return []
-      }
+    return subjects.filter((subject) => {
+      if (!query) return true
 
-      const group =
-        sessionsByDate.find(
-          (group) =>
-            group.date ===
-            selectedDate
-        )
+      return (
+        subject.name.toLowerCase().includes(query) ||
+        (SUBJECT_GROUPS.find((group) => group.type === subject.type)?.label
+          .toLowerCase()
+          .includes(query) ?? false)
+      )
+    })
+  }, [subjects, search])
 
-      return group?.sessions || []
-    }, [
-      selectedDate,
-      sessionsByDate,
-    ])
+  const tutorsForSubject = useMemo(() => {
+    if (!selectedSubject) return []
 
-  const selectedTutorData =
-    tutors.find(
-      (tutor) =>
-        tutor.id ===
-        selectedTutor
-    )
+    const matchingTutorSessions = new Map<string, BookableSession[]>()
 
-  const selectedSubjectData =
-    subjects.find(
-      (subject) =>
-        subject.id ===
-        selectedSubject
-    )
+    for (const session of filteredSessions) {
+      const rule = rulesById.get(session.availability_rule_id)
+      if (!rule) continue
 
-  const selectedSessionData =
-    sessions.find(
-      (session) =>
-        session.id ===
-        selectedSession
-    )
+      const tutor = tutorsById.get(rule.tutor_id)
+      if (!tutor || !tutor.subjects?.includes(selectedSubject)) continue
 
-  function chooseSubject(
-    subjectId: string
-  ) {
-    setSelectedSubject(
-      subjectId
-    )
+      const existing = matchingTutorSessions.get(tutor.id) || []
+      existing.push(session)
+      matchingTutorSessions.set(tutor.id, existing)
+    }
 
+    return Array.from(matchingTutorSessions.entries())
+      .map(([tutorId, tutorSessions]) => ({
+        tutor: tutorsById.get(tutorId)!,
+        sessions: tutorSessions.sort(compareSessions),
+      }))
+      .sort((a, b) => {
+        const dateComparison = compareSessions(a.sessions[0], b.sessions[0])
+        return dateComparison || a.tutor.name.localeCompare(b.tutor.name)
+      })
+  }, [
+    selectedSubject,
+    filteredSessions,
+    rulesById,
+    tutorsById,
+  ])
+
+  const selectedSubjectData = selectedSubject
+    ? subjectsById.get(selectedSubject)
+    : undefined
+
+  const selectedTutorData = selectedTutor
+    ? tutorsById.get(selectedTutor)
+    : undefined
+
+  const selectedSessionData = selectedSession
+    ? sessions.find((session) => session.id === selectedSession)
+    : undefined
+
+  const selectedTutorSessions = useMemo(() => {
+    if (!selectedTutor) return []
+
+    return filteredSessions
+      .filter((session) => {
+        const rule = rulesById.get(session.availability_rule_id)
+        return rule?.tutor_id === selectedTutor
+      })
+      .sort(compareSessions)
+  }, [selectedTutor, filteredSessions, rulesById])
+
+  const activeFilterCount =
+    (sessionTypes.length !== SESSION_TYPES.length ? 1 : 0) +
+    (selectedDays.length > 0 ? 1 : 0) +
+    (dateFrom ? 1 : 0) +
+    (dateTo ? 1 : 0) +
+    (timeFilter !== 'any' ? 1 : 0)
+
+  function resetTutorSelection() {
     setSelectedTutor(null)
-    setSelectedDate(null)
     setSelectedSession(null)
-
     setSuccess('')
     setError('')
   }
 
-  function chooseTutor(
-    tutorId: string
-  ) {
-    setSelectedTutor(
-      tutorId
+  function chooseSubject(subjectId: string) {
+    setSelectedSubject((current) =>
+      current === subjectId ? null : subjectId
     )
+    resetTutorSelection()
+  }
 
-    setSelectedDate(null)
+  function chooseTutor(tutorId: string) {
+    setSelectedTutor((current) =>
+      current === tutorId ? null : tutorId
+    )
     setSelectedSession(null)
-
     setSuccess('')
     setError('')
   }
 
-  function chooseDate(
-    date: string
-  ) {
-    setSelectedDate(
-      date
-    )
+  function toggleSessionType(type: SessionType) {
+    setSessionTypes((current) => {
+      const next = current.includes(type)
+        ? current.filter((item) => item !== type)
+        : [...current, type]
 
-    setSelectedSession(null)
-    setSuccess('')
+      return next
+    })
+
+    resetTutorSelection()
   }
 
-  function chooseSession(
-    sessionId: string
-  ) {
-    setSelectedSession(
-      sessionId
+  function toggleDay(day: number) {
+    setSelectedDays((current) =>
+      current.includes(day)
+        ? current.filter((item) => item !== day)
+        : [...current, day]
     )
 
-    setSuccess('')
-    setError('')
+    resetTutorSelection()
+  }
+
+  function updateFilter<T>(setter: (value: T) => void, value: T) {
+    setter(value)
+    resetTutorSelection()
+  }
+
+  function clearFilters() {
+    setSessionTypes([...SESSION_TYPES])
+    setSelectedDays([])
+    setDateFrom('')
+    setDateTo('')
+    setTimeFilter('any')
+    setSearch('')
+    setShowLfpSessions(false)
+    resetTutorSelection()
   }
 
   async function bookSession() {
     setError('')
     setSuccess('')
 
-    if (
-      !selectedSessionData ||
-      !selectedTutorData
-    ) {
-      setError(
-        'Please select a session.'
-      )
-
+    if (!selectedSessionData || !selectedTutorData || !selectedSubjectData) {
+      setError('Please select a subject, tutor, and session.')
       return
     }
 
-    /*
-     * Re-check the 24-hour cutoff immediately before booking.
-     * This prevents a session from being booked if it crossed
-     * into the 24-hour window while the page was open.
-     */
     if (
-      !isSessionAtLeast24HoursAway(
-        selectedSessionData
-      )
+      !isSessionAtLeast24HoursAway(selectedSessionData, new Date())
     ) {
       setError(
         'Sessions must be booked at least 24 hours in advance. Please choose another time.'
@@ -745,215 +502,144 @@ export default function BookPage() {
       return
     }
 
+    if (
+      selectedSessionData.session_type === 'lfp' &&
+      studentGrade !== null &&
+      studentGrade < 9 &&
+      !showLfpSessions
+    ) {
+      setError('Enable LFP sessions before booking this session.')
+      setSelectedSession(null)
+      return
+    }
+
     setBooking(true)
 
-    const {
-      data: { user },
-      error: userError,
-    } =
-      await supabase.auth.getUser()
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser()
 
-    if (
-      userError ||
-      !user
-    ) {
-      setError(
-        'You must be signed in to book a tutoring session.'
-      )
-
-      setBooking(false)
-      return
-    }
-
-    /*
-     * Check whether the session was booked
-     * between loading the page and clicking
-     * the button.
-     */
-
-    const {
-      data: existingBooking,
-      error: checkError,
-    } = await supabase
-      .from('bookings')
-      .select('id')
-      .eq(
-        'session_id',
-        selectedSessionData.id
-      )
-      .maybeSingle()
-
-    if (checkError) {
-      setError(
-        checkError.message
-      )
-
-      setBooking(false)
-      return
-    }
-
-    if (existingBooking) {
-      setError(
-        'Sorry, another student just booked this session. Please choose another time.'
-      )
-
-      setSelectedSession(null)
-
-      setBooking(false)
-
-      await loadData()
-
-      return
-    }
-
-    /*
-     * Create the booking.
-     */
-
-    const {
-      error: bookingError,
-    } = await supabase
-      .from('bookings')
-      .insert({
-        session_id:
-          selectedSessionData.id,
-
-        student_id:
-          user.id,
-
-        tutor_id:
-          selectedTutorData.id,
-
-        subject:
-          selectedSubjectData?.name ?? null,
-      })
-
-    if (bookingError) {
-      console.error(
-        bookingError
-      )
-
-      if (
-        bookingError.code ===
-        '23505'
-      ) {
-        setError(
-          'Sorry, this session was just booked by another student. Please choose another time.'
-        )
-      } else {
-        setError(
-          bookingError.message
-        )
+      if (userError || !user) {
+        setError('You must be signed in to book a tutoring session.')
+        return
       }
 
+      // Recheck the session to prevent two students booking it simultaneously.
+      const { data: existingBooking, error: checkError } = await supabase
+        .from('bookings')
+        .select('id, status')
+        .eq('session_id', selectedSessionData.id)
+
+      if (checkError) {
+        setError(checkError.message)
+        return
+      }
+
+      if (
+        (existingBooking || []).some(
+          (item) => !isCancelledBooking(item.status)
+        )
+      ) {
+        setError(
+          'Sorry, another student just booked this session. Please choose another time.'
+        )
+        setSelectedSession(null)
+        await loadData(true)
+        return
+      }
+
+      const { error: bookingError } = await supabase
+        .from('bookings')
+        .insert({
+          session_id: selectedSessionData.id,
+          student_id: user.id,
+          tutor_id: selectedTutorData.id,
+          subject: selectedSubjectData.name,
+        })
+
+      if (bookingError) {
+        console.error('Booking failed:', bookingError)
+
+        if (bookingError.code === '23505') {
+          setError(
+            'Sorry, this session was just booked by another student. Please choose another time.'
+          )
+        } else {
+          setError(bookingError.message)
+        }
+
+        await loadData(true)
+        return
+      }
+
+      const sessionDateTime = new Date(
+        `${selectedSessionData.session_date}T${selectedSessionData.start_time}`
+      )
+
+      const scheduledFor = new Date(
+        sessionDateTime.getTime() - 60 * 60 * 1000
+      ).toISOString()
+
+      const immediate = new Date().toISOString()
+
+      const notificationResults = await Promise.all([
+        supabase.from('notifications').insert({
+          recipient_id: selectedTutorData.id,
+          notification_type: 'session_booked',
+          session_id: selectedSessionData.id,
+          scheduled_for: immediate,
+        }),
+        supabase.from('notifications').insert({
+          recipient_id: selectedTutorData.id,
+          notification_type: 'session_reminder',
+          session_id: selectedSessionData.id,
+          scheduled_for: scheduledFor,
+        }),
+        supabase.from('notifications').insert({
+          recipient_id: user.id,
+          notification_type: 'session_confirmation',
+          session_id: selectedSessionData.id,
+          scheduled_for: immediate,
+        }),
+        supabase.from('notifications').insert({
+          recipient_id: user.id,
+          notification_type: 'session_reminder',
+          session_id: selectedSessionData.id,
+          scheduled_for: scheduledFor,
+        }),
+      ])
+
+      for (const result of notificationResults) {
+        if (result.error) {
+          console.error(
+            'Booking succeeded, but a notification could not be created:',
+            result.error
+          )
+        }
+      }
+
+      setSuccess('Your tutoring session has been booked!')
+      setSelectedSession(null)
+      setSelectedTutor(null)
+
+      await loadData(true)
+    } catch (err) {
+      console.error('Booking error:', err)
+      setError('An unexpected error occurred while booking. Please try again.')
+    } finally {
       setBooking(false)
-
-      await loadData()
-
-      return
     }
-
-    // consts for notifs
-    const sessionDateTime = new Date(
-      `${selectedSessionData.session_date}T${selectedSessionData.start_time}`
-    )
-
-    const scheduledFor = new Date(
-      sessionDateTime.getTime() - 60 * 60 * 1000
-    ).toISOString()
-
-    // Create notification for the tutor
-    const { error: tutorNotificationError } = await supabase
-      .from('notifications')
-      .insert({
-        recipient_id: selectedTutorData.id,
-        notification_type: 'session_booked',
-        session_id: selectedSessionData.id,
-        scheduled_for: new Date().toISOString(),
-      })
-
-    if (tutorNotificationError) {
-      console.error(
-        'Booking succeeded, but tutor notification could not be created:',
-        tutorNotificationError
-      )
-    }
-
-    // Create reminder for the tutor
-    const { error: tReminderNotificationError } = await supabase
-      .from('notifications')
-      .insert({
-        recipient_id: selectedTutorData.id,
-        notification_type: 'session_reminder',
-        session_id: selectedSessionData.id,
-        scheduled_for: scheduledFor,
-      })
-
-    if (tReminderNotificationError) {
-      console.error(
-        'Booking succeeded, but tutor reminder notification could not be created:',
-        tReminderNotificationError
-      )
-    }
-
-    // Create notification for the student
-    const { error: studentNotificationError } = await supabase
-      .from('notifications')
-      .insert({
-        recipient_id: user.id,
-        notification_type: 'session_confirmation',
-        session_id: selectedSessionData.id,
-        scheduled_for: new Date().toISOString(),
-      })
-
-    if (studentNotificationError) {
-      console.error(
-        'Booking succeeded, but student notification could not be created:',
-        studentNotificationError
-      )
-    }
-
-    // Create reminder notification
-
-    const { error: reminderNotificationError } = await supabase
-      .from('notifications')
-      .insert({
-        recipient_id: user.id,
-        notification_type: 'session_reminder',
-        session_id: selectedSessionData.id,
-        scheduled_for: scheduledFor,
-      })
-
-    if (reminderNotificationError) {
-      console.error(
-        'Booking succeeded, but reminder notification could not be created:',
-        reminderNotificationError
-      )
-    }
-
-
-    setSuccess(
-      'Your tutoring session has been booked!'
-    )
-
-    setSelectedSession(
-      null
-    )
-
-    setBooking(false)
-
-    await loadData()
   }
 
   if (loading) {
     return (
       <DashboardLayout role="student">
-        <div className="mx-auto max-w-5xl">
-          <div className="py-12 text-center">
-            <p className="text-muted-foreground">
-              Loading available tutors...
-            </p>
-          </div>
+        <div className="mx-auto max-w-6xl py-12 text-center">
+          <p className="text-muted-foreground">
+            Loading available tutoring sessions...
+          </p>
         </div>
       </DashboardLayout>
     )
@@ -961,636 +647,610 @@ export default function BookPage() {
 
   return (
     <DashboardLayout role="student">
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-6xl space-y-6">
+        {/* Header */}
+        <header className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">
+              Book a Tutor
+            </h1>
+            <p className="mt-1 text-muted-foreground">
+              Find a subject, choose a time that works, and book a peer tutor.
+            </p>
+          </div>
 
-        {/* HEADER */}
-
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight">
-            Book a Tutor
-          </h1>
-
-          <p className="mt-1 text-muted-foreground">
-            Find a peer tutor and choose a
-            time that works for you.
-          </p>
-        </div>
-
-        {/* PROGRESS */}
-
-        <div className="mb-8 grid gap-3 sm:grid-cols-3">
-          <ProgressStep
-            number="1"
-            title="Choose a subject"
-            active={
-              !selectedSubject
-            }
-            complete={
-              Boolean(
-                selectedSubject
-              )
-            }
-          />
-
-          <ProgressStep
-            number="2"
-            title="Choose a tutor"
-            active={
-              Boolean(
-                selectedSubject
-              ) &&
-              !selectedTutor
-            }
-            complete={
-              Boolean(
-                selectedTutor
-              )
-            }
-          />
-
-          <ProgressStep
-            number="3"
-            title="Choose a time"
-            active={
-              Boolean(
-                selectedTutor
-              )
-            }
-            complete={
-              Boolean(
-                selectedSession
-              )
-            }
-          />
-        </div>
-
-        {/* MESSAGES */}
+          <Button
+            variant="outline"
+            onClick={() => void loadData(true)}
+            disabled={refreshing}
+          >
+            {refreshing ? 'Refreshing...' : 'Refresh availability'}
+          </Button>
+        </header>
 
         {error && (
-          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <div
+            role="alert"
+            className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          >
             {error}
           </div>
         )}
 
         {success && (
-          <div className="mb-6 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+          <div
+            role="status"
+            className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700"
+          >
             {success}
           </div>
         )}
 
-        {/* STEP 1 */}
-
-        <section className="rounded-2xl border bg-white shadow-sm">
-
-          <div className="border-b p-6">
+        {/* Search and subjects */}
+        <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+          <div className="border-b p-5 sm:p-6">
             <div className="flex items-start gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
                 1
               </div>
 
-              <div className="flex-1">
-                <div className="flex items-start justify-between gap-6">
-                  <div>
-                    <h2 className="text-lg font-semibold">
-                      What do you need help with?
-                    </h2>
-
-                    <p className="text-sm text-muted-foreground">
-                      Select the subject you want tutoring in.
-                    </p>
-                  </div>
-
-                  {studentLoaded &&
-                    studentGrade !== null &&
-                    studentGrade < 9 && (
-                      <div className="shrink-0">
-                        <div className="flex items-center gap-4">
-                          <div className="text-right">
-                            <p className="text-sm font-medium">
-                              Show LFP sessions
-                            </p>
-
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              LFP sessions take place at the LFP campus during school hours.
-                            </p>
-                          </div>
-
-                          <button
-                            type="button"
-                            role="switch"
-                            aria-checked={showLfpSessions}
-                            onClick={() => {
-                              setShowLfpSessions((current) => !current)
-
-                              setSelectedTutor(null)
-                              setSelectedDate(null)
-                              setSelectedSession(null)
-                              setSuccess('')
-                              setError('')
-                            }}
-                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
-                              showLfpSessions
-                                ? 'bg-primary'
-                                : 'bg-muted-foreground/30'
-                            }`}
-                          >
-                            <span
-                              className={`pointer-events-none block h-5 w-5 rounded-full bg-white shadow-sm ring-0 transition-transform ${
-                                showLfpSessions
-                                  ? 'translate-x-5'
-                                  : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-lg font-semibold">
+                  What would you like help with?
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Search for a subject or browse a category. Subjects are ordered
+                  by their configured sort number.
+                </p>
               </div>
             </div>
+
+            <div className="mt-5">
+              <label htmlFor="subject-search" className="sr-only">
+                Search subjects
+              </label>
+              <div className="relative">
+                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted-foreground">
+                  <SearchIcon />
+                </span>
+                <input
+                  id="subject-search"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search math, chemistry, SAT prep..."
+                  className="h-11 w-full rounded-xl border bg-background pl-10 pr-4 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+            </div>
+
+            {studentLoaded && studentGrade !== null && studentGrade < 9 && (
+              <div className="mt-4 flex flex-col justify-between gap-3 rounded-xl border bg-muted/20 p-4 sm:flex-row sm:items-center">
+                <div>
+                  <p className="font-medium">Show LFP sessions</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    LFP sessions take place at school during school hours.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={showLfpSessions}
+                  onClick={() => {
+                    setShowLfpSessions((current) => !current)
+                    resetTutorSelection()
+                  }}
+                  className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors ${
+                    showLfpSessions
+                      ? 'bg-primary'
+                      : 'bg-muted-foreground/30'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none block h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+                      showLfpSessions ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            )}
           </div>
 
           {subjects.length === 0 ? (
+            <div className="p-6 text-sm text-muted-foreground">
+              No subjects are available yet.
+            </div>
+          ) : filteredSubjects.length === 0 ? (
             <div className="p-6">
-              <p className="text-muted-foreground">
-                No subjects are available yet.
-              </p>
+              <p className="font-medium">No subjects match your search.</p>
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="mt-2 text-sm text-primary underline underline-offset-4"
+              >
+                Clear search
+              </button>
             </div>
           ) : (
-            <div className="grid gap-4 p-6 sm:grid-cols-2 lg:grid-cols-5">
-              {subjectGroups.map(
-                (group) => {
-                  const groupSubjects =
-                    subjects.filter(
-                      (subject) =>
-                        subject.type ===
-                        group.type
-                    )
+            <div className="space-y-5 p-5 sm:p-6">
+              {SUBJECT_GROUPS.map((group) => {
+                const groupSubjects = filteredSubjects.filter(
+                  (subject) => subject.type === group.type
+                )
 
-                  return (
-                    <div
-                      key={group.type}
-                      className={`rounded-2xl border p-4 ${group.containerClass}`}
-                    >
-                      <h3
-                        className={`mb-3 text-sm font-bold uppercase tracking-wide ${group.headerClass}`}
-                      >
+                if (groupSubjects.length === 0) return null
+
+                return (
+                  <div key={group.type}>
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold">
                         {group.label}
                       </h3>
-
-                      {groupSubjects.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">
-                          No subjects
-                        </p>
-                      ) : (
-                        <div className="flex flex-col gap-2">
-                          {groupSubjects.map(
-                            (subject) => {
-                              const isSelected =
-                                selectedSubject ===
-                                subject.id
-
-                              return (
-                                <Button
-                                  key={
-                                    subject.id
-                                  }
-                                  variant="outline"
-                                  className={`w-full h-auto min-h-10 justify-start whitespace-normal break-words rounded-xl border text-left shadow-none ${
-                                    isSelected
-                                      ? group.buttonSelectedClass
-                                      : group.buttonClass
-                                  }`}
-                                  onClick={() =>
-                                    chooseSubject(
-                                      subject.id
-                                    )
-                                  }
-                                >
-                                  {subject.name}
-                                </Button>
-                              )
-                            }
-                          )}
-                        </div>
-                      )}
+                      <span className="text-xs text-muted-foreground">
+                        {groupSubjects.length}{' '}
+                        {groupSubjects.length === 1 ? 'subject' : 'subjects'}
+                      </span>
                     </div>
-                  )
-                }
-              )}
+
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                      {groupSubjects.map((subject) => {
+                        const isSelected = selectedSubject === subject.id
+
+                        return (
+                          <button
+                            key={subject.id}
+                            type="button"
+                            aria-pressed={isSelected}
+                            onClick={() => chooseSubject(subject.id)}
+                            className={`flex min-h-14 items-center justify-between gap-3 rounded-xl border p-4 text-left transition ${
+                              isSelected
+                                ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                                : 'hover:border-primary/40 hover:bg-muted/30'
+                            }`}
+                          >
+                            <span className="font-medium">{subject.name}</span>
+                            <span
+                              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${
+                                isSelected
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'bg-muted text-muted-foreground'
+                              }`}
+                            >
+                              {isSelected ? '✓' : '→'}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
         </section>
 
-        {/* STEP 2 */}
+        {/* Filters */}
+        <section className="rounded-2xl border bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Find a time that works</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Only tutors with sessions matching these filters will appear.
+              </p>
+            </div>
 
-        {selectedSubject && (
-          <section className="mt-6 rounded-2xl border bg-white shadow-sm">
+            {activeFilterCount > 0 && (
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            )}
+          </div>
 
-            <div className="border-b p-6">
+          <div className="mt-5 space-y-5">
+            <div>
+              <p className="mb-2 text-sm font-medium">Session location</p>
+              <div className="flex flex-wrap gap-2">
+                {SESSION_TYPES.map((type) => {
+                  const active = sessionTypes.includes(type)
+                  const hiddenLfp =
+                    type === 'lfp' && !canSeeLfp
+
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => toggleSessionType(type)}
+                      className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
+                        active
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'hover:border-primary/40 hover:bg-muted/30'
+                      }`}
+                    >
+                      {SESSION_LABELS[type]}
+                      {hiddenLfp ? ' (hidden for your grade)' : ''}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {!canSeeLfp && sessionTypes.includes('lfp') && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  LFP is selected, but its sessions remain hidden until you
+                  enable the LFP toggle above.
+                </p>
+              )}
+
+              {sessionTypes.length === 0 && (
+                <p className="mt-2 text-xs text-amber-700">
+                  Select at least one session location to see results.
+                </p>
+              )}
+            </div>
+
+            <div>
+              <p className="mb-2 text-sm font-medium">Days of the week</p>
+              <div className="flex flex-wrap gap-2">
+                {WEEKDAYS.map((day) => {
+                  const active = selectedDays.includes(day.value)
+
+                  return (
+                    <button
+                      key={day.value}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => toggleDay(day.value)}
+                      className={`min-w-14 rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                        active
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'hover:border-primary/40 hover:bg-muted/30'
+                      }`}
+                    >
+                      {day.label}
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Leave all days unselected to include every day.
+              </p>
+            </div>
+
+            <div>
+              <button
+                type="button"
+                aria-expanded={showMoreFilters}
+                onClick={() => setShowMoreFilters((current) => !current)}
+                className="flex w-full items-center justify-between rounded-xl border p-3 text-left transition hover:bg-muted/30"
+              >
+                <span className="font-medium">More filters</span>
+                <span className="text-sm text-muted-foreground">
+                  {showMoreFilters ? '− Hide' : '+ Date and time'}
+                </span>
+              </button>
+
+              {showMoreFilters && (
+                <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                  <div>
+                    <label
+                      htmlFor="date-from"
+                      className="mb-2 block text-sm font-medium"
+                    >
+                      From date
+                    </label>
+                    <input
+                      id="date-from"
+                      type="date"
+                      min={formatLocalDate(now)}
+                      max={dateTo || undefined}
+                      value={dateFrom}
+                      onChange={(event) =>
+                        updateFilter(setDateFrom, event.target.value)
+                      }
+                      className="h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none focus:border-primary"
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="date-to"
+                      className="mb-2 block text-sm font-medium"
+                    >
+                      Through date
+                    </label>
+                    <input
+                      id="date-to"
+                      type="date"
+                      min={dateFrom || formatLocalDate(now)}
+                      value={dateTo}
+                      onChange={(event) =>
+                        updateFilter(setDateTo, event.target.value)
+                      }
+                      className="h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none focus:border-primary"
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="time-of-day"
+                      className="mb-2 block text-sm font-medium"
+                    >
+                      Time of day
+                    </label>
+                    <select
+                      id="time-of-day"
+                      value={timeFilter}
+                      onChange={(event) =>
+                        updateFilter(
+                          setTimeFilter,
+                          event.target.value as TimeFilter
+                        )
+                      }
+                      className="h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none focus:border-primary"
+                    >
+                      <option value="any">Any time</option>
+                      <option value="morning">Morning (before noon)</option>
+                      <option value="afternoon">Afternoon (12–5 PM)</option>
+                      <option value="evening">Evening (5 PM onward)</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 border-t pt-4 text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">
+                {filteredSessions.length}
+              </span>
+              matching available{' '}
+              {filteredSessions.length === 1 ? 'session' : 'sessions'}
+              <span>·</span>
+              Book at least 24 hours in advance
+            </div>
+          </div>
+        </section>
+
+        {/* Tutor results */}
+        <section className="space-y-4">
+          <div className="flex items-end justify-between gap-3">
+            <div>
               <div className="flex items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
                   2
                 </div>
-
-                <div>
-                  <h2 className="text-lg font-semibold">
-                    Choose a tutor
-                  </h2>
-
-                  <p className="text-sm text-muted-foreground">
-                    Tutors available for{' '}
-                    <span className="font-medium text-foreground">
-                      {
-                        selectedSubjectData?.name
-                      }
-                    </span>
-                    .
-                  </p>
-                </div>
+                <h2 className="text-xl font-semibold">Available tutors</h2>
               </div>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {selectedSubjectData
+                  ? `Tutors for ${selectedSubjectData.name} who match your filters.`
+                  : 'Choose a subject above to find matching tutors.'}
+              </p>
             </div>
 
-            {tutorsForSubject.length === 0 ? (
-              <div className="p-6">
-                <p className="font-medium">
-                  No tutors are currently available for this subject.
-                </p>
+            {selectedSubject && (
+              <Badge variant="secondary">
+                {tutorsForSubject.length}{' '}
+                {tutorsForSubject.length === 1 ? 'tutor' : 'tutors'}
+              </Badge>
+            )}
+          </div>
 
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Try another subject or check back later.
-                </p>
+          {!selectedSubject ? (
+            <div className="rounded-2xl border border-dashed p-8 text-center">
+              <p className="font-medium">Choose a subject to get started</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Your tutor results will appear here.
+              </p>
+            </div>
+          ) : tutorsForSubject.length === 0 ? (
+            <div className="rounded-2xl border p-6">
+              <p className="font-medium">
+                No tutors match this subject and your current filters.
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Try a different location, day, or time range, or select another
+                subject. You can also check back later.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button variant="outline" onClick={clearFilters}>
+                  Clear filters
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setSelectedSubject(null)}
+                >
+                  Choose another subject
+                </Button>
               </div>
-            ) : (
-              <div className="grid gap-3 p-6 md:grid-cols-2">
-                {tutorsForSubject.map(
-                  (tutor) => {
-                    const tutorSubjects =
-                      tutor.subjects
-                        ?.map(
-                          (
-                            subjectId
-                          ) =>
-                            subjects.find(
-                              (
-                                subject
-                              ) =>
-                                subject.id ===
-                                subjectId
-                            )
-                        )
-                        .filter(
-                          Boolean
-                        ) as Subject[]
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {tutorsForSubject.map(({ tutor, sessions: tutorSessions }) => {
+                const expanded = selectedTutor === tutor.id
+                const tutorSubjects = (tutor.subjects || [])
+                  .map((id) => subjectsById.get(id))
+                  .filter((subject): subject is Subject => Boolean(subject))
 
-                    const isSelected =
-                      selectedTutor ===
-                      tutor.id
+                const nextSession = tutorSessions[0]
 
-                    return (
-                      <button
-                        key={
-                          tutor.id
-                        }
-                        type="button"
-                        onClick={() =>
-                          chooseTutor(
-                            tutor.id
-                          )
-                        }
-                        className={`rounded-xl border p-5 text-left transition ${
-                          isSelected
-                            ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                            : 'hover:border-primary/40 hover:bg-muted/30'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <p className="font-semibold">
-                              {tutor.name}
-                            </p>
-
-                            {tutor.grade && (
-                              <p className="mt-1 text-sm text-muted-foreground">
-                                Grade{' '}
-                                {tutor.grade}
-                              </p>
-                            )}
-                          </div>
-
-                          <div
-                            className={`flex h-8 w-8 items-center justify-center rounded-full ${
-                              isSelected
-                                ? 'bg-primary text-primary-foreground'
-                                : 'bg-muted text-muted-foreground'
-                            }`}
-                          >
-                            {isSelected
-                              ? '✓'
-                              : '→'}
-                          </div>
+                return (
+                  <article
+                    key={tutor.id}
+                    className={`overflow-hidden rounded-2xl border bg-white shadow-sm transition ${
+                      expanded ? 'border-primary ring-1 ring-primary/30' : ''
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      aria-expanded={expanded}
+                      onClick={() => chooseTutor(tutor.id)}
+                      className="flex w-full flex-col gap-4 p-5 text-left transition hover:bg-muted/20 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-semibold">{tutor.name}</h3>
+                          {tutor.grade !== null && tutor.grade !== undefined && (
+                            <Badge variant="outline">Grade {tutor.grade}</Badge>
+                          )}
                         </div>
 
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          {tutorSubjects.map(
-                            (
-                              subject
-                            ) => (
-                              <Badge
-                                key={
-                                  subject.id
-                                }
-                                variant="secondary"
-                              >
-                                {
-                                  subject.name
-                                }
-                              </Badge>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {tutorSubjects.map((subject) => (
+                            <Badge key={subject.id} variant="secondary">
+                              {subject.name}
+                            </Badge>
+                          ))}
+                        </div>
+
+                        <p className="mt-3 text-sm text-muted-foreground">
+                          Next available:{' '}
+                          <span className="font-medium text-foreground">
+                            {formatWeekdayLong(nextSession.session_date)},{' '}
+                            {formatShortDate(nextSession.session_date)} at{' '}
+                            {formatTime(nextSession.start_time)}
+                          </span>
+                        </p>
+                      </div>
+
+                      <div className="flex shrink-0 items-center justify-between gap-4 sm:justify-end">
+                        <div className="text-left sm:text-right">
+                          <p className="font-semibold">
+                            {tutorSessions.length}{' '}
+                            {tutorSessions.length === 1 ? 'session' : 'sessions'}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            match your filters
+                          </p>
+                        </div>
+                        <span className="text-lg text-muted-foreground">
+                          {expanded ? '−' : '+'}
+                        </span>
+                      </div>
+                    </button>
+
+                    {expanded && (
+                      <div className="border-t bg-muted/10 p-5">
+                        <div className="mb-4">
+                          <h4 className="font-semibold">Choose a session</h4>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            Select an available time below.
+                          </p>
+                        </div>
+
+                        <div className="space-y-5">
+                          {groupSessionsByDate(tutorSessions).map(
+                            ({ date, sessions: dateSessions }) => (
+                              <div key={date}>
+                                <h5 className="mb-3 text-sm font-medium">
+                                  {formatDate(date)}
+                                </h5>
+
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                  {dateSessions.map((session) => {
+                                    const selected = selectedSession === session.id
+
+                                    return (
+                                      <button
+                                        key={session.id}
+                                        type="button"
+                                        aria-pressed={selected}
+                                        onClick={() => {
+                                          setSelectedSession(session.id)
+                                          setSuccess('')
+                                          setError('')
+                                        }}
+                                        className={`rounded-xl border p-4 text-left transition ${
+                                          selected
+                                            ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                                            : 'bg-white hover:border-primary/40'
+                                        }`}
+                                      >
+                                        <div className="flex items-start justify-between gap-3">
+                                          <div>
+                                            <p className="font-semibold">
+                                              {formatTime(session.start_time)} –{' '}
+                                              {formatTime(session.end_time)}
+                                            </p>
+                                            <p className="mt-1 text-xs text-muted-foreground">
+                                              {SESSION_DESCRIPTIONS[session.session_type]}
+                                            </p>
+                                          </div>
+
+                                          <Badge
+                                            variant={selected ? 'default' : 'secondary'}
+                                          >
+                                            {SESSION_LABELS[session.session_type]}
+                                          </Badge>
+                                        </div>
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              </div>
                             )
                           )}
                         </div>
-                      </button>
-                    )
-                  }
-                )}
+                      </div>
+                    )}
+                  </article>
+                )
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* Confirmation */}
+        {selectedSessionData && selectedTutorData && selectedSubjectData && (
+          <section className="rounded-2xl border bg-white p-5 shadow-sm sm:p-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+                3
               </div>
-            )}
-          </section>
-        )}
-
-        {/* STEP 3 */}
-
-        {selectedTutor && (
-          <section className="mt-6 rounded-2xl border bg-white shadow-sm">
-
-            <div className="border-b p-6">
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
-                  3
-                </div>
-
-                <div>
-                  <h2 className="text-lg font-semibold">
-                    Choose a time
-                  </h2>
-
-                  <p className="text-sm text-muted-foreground">
-                    Available sessions with{' '}
-                    <span className="font-medium text-foreground">
-                      {
-                        selectedTutorData?.name
-                      }
-                    </span>
-                    .
-                  </p>
-                </div>
+              <div>
+                <h2 className="text-lg font-semibold">Confirm your session</h2>
+                <p className="text-sm text-muted-foreground">
+                  Review the details before booking.
+                </p>
               </div>
             </div>
 
-            {sessionsByDate.length === 0 ? (
-              <div className="p-6">
-                <p className="font-medium">
-                  No upcoming sessions are available.
-                </p>
-
-                <p className="mt-1 text-sm text-muted-foreground">
-                  This tutor may add more availability later. Try another tutor if you need help sooner.
-                </p>
-              </div>
-            ) : (
-              <div className="p-6">
-
-                {/* DATE SELECTOR */}
-
-                <div className="mb-6">
-                  <p className="mb-3 text-sm font-medium">
-                    Select a day
-                  </p>
-
-                  <div className="flex gap-2 overflow-x-auto pb-2">
-                    {sessionsByDate.map(
-                      (group) => {
-                        const isSelected =
-                          selectedDate ===
-                          group.date
-
-                        return (
-                          <button
-                            key={
-                              group.date
-                            }
-                            type="button"
-                            onClick={() =>
-                              chooseDate(
-                                group.date
-                              )
-                            }
-                            className={`min-w-[100px] rounded-xl border px-4 py-3 text-left transition ${
-                              isSelected
-                                ? 'border-primary bg-primary text-primary-foreground'
-                                : 'hover:border-primary/40 hover:bg-muted/40'
-                            }`}
-                          >
-                            <p className="text-xs font-medium opacity-80">
-                              {formatWeekday(
-                                group.date
-                              )}
-                            </p>
-
-                            <p className="mt-1 font-semibold">
-                              {formatShortDate(
-                                group.date
-                              )}
-                            </p>
-
-                            <p className="mt-1 text-xs opacity-70">
-                              {
-                                group
-                                  .sessions
-                                  .length
-                              }{' '}
-                              {group
-                                .sessions
-                                .length ===
-                              1
-                                ? 'time'
-                                : 'times'}
-                            </p>
-                          </button>
-                        )
-                      }
-                    )}
-                  </div>
-                </div>
-
-                {/* TIMES */}
-
-                {selectedDate && (
-                  <div>
-                    <p className="mb-3 text-sm font-medium">
-                      Available times
-                    </p>
-
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {sessionsForSelectedDate.map(
-                        (
-                          session
-                        ) => {
-                          const isSelected =
-                            selectedSession ===
-                            session.id
-
-                          return (
-                            <button
-                              key={
-                                session.id
-                              }
-                              type="button"
-                              onClick={() =>
-                                chooseSession(
-                                  session.id
-                                )
-                              }
-                              className={`rounded-xl border p-4 text-left transition ${
-                                isSelected
-                                  ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                                  : 'hover:border-primary/40 hover:bg-muted/30'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between gap-4">
-                                <div>
-                                  <p className="text-lg font-semibold">
-                                    {formatTime(
-                                      session.start_time
-                                    )}
-                                    {' – '}
-                                    {formatTime(
-                                      session.end_time
-                                    )}
-                                  </p>
-
-                                  <p className="mt-1 text-sm text-muted-foreground">
-                                    {
-                                      sessionTypeDescriptions[
-                                        session.session_type
-                                      ]
-                                    }
-                                  </p>
-                                </div>
-
-                                <Badge
-                                  variant={
-                                    isSelected
-                                      ? 'default'
-                                      : 'secondary'
-                                  }
-                                >
-                                  {
-                                    sessionTypeLabels[
-                                      session.session_type
-                                    ]
-                                  }
-                                </Badge>
-                              </div>
-                            </button>
-                          )
-                        }
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </section>
-        )}
-
-        {/* CONFIRMATION */}
-
-        {selectedSessionData && (
-          <section className="mt-6 rounded-2xl border bg-white p-6 shadow-sm">
-
-            <h2 className="text-lg font-semibold">
-              Confirm your session
-            </h2>
-
-            <p className="mt-1 text-sm text-muted-foreground">
-              Make sure everything looks right before booking.
-            </p>
-
-            <div className="mt-5 rounded-xl bg-muted/40 p-5">
-
-              <div className="flex flex-wrap items-center gap-2">
+            <div className="mt-5 rounded-xl bg-muted/30 p-5">
+              <div className="flex flex-wrap gap-2">
                 <Badge>
-                  {
-                    selectedSessionData
-                      .session_type ===
-                    'library'
-                      ? 'Library Session'
-                      : sessionTypeLabels[
-                          selectedSessionData
-                            .session_type
-                        ]
-                  }
+                  {SESSION_LABELS[selectedSessionData.session_type]}
                 </Badge>
-
-                <Badge variant="secondary">
-                  {
-                    selectedSubjectData?.name
-                  }
-                </Badge>
+                <Badge variant="secondary">{selectedSubjectData.name}</Badge>
               </div>
 
-              <div className="mt-4">
-                <p className="text-xl font-semibold">
-                  {formatDate(
-                    selectedSessionData.session_date
-                  )}
-                </p>
-
-                <p className="mt-1 text-lg">
-                  {formatTime(
-                    selectedSessionData.start_time
-                  )}
-                  {' – '}
-                  {formatTime(
-                    selectedSessionData.end_time
-                  )}
-                </p>
-              </div>
+              <p className="mt-4 text-xl font-semibold">
+                {formatDate(selectedSessionData.session_date)}
+              </p>
+              <p className="mt-1 text-lg">
+                {formatTime(selectedSessionData.start_time)} –{' '}
+                {formatTime(selectedSessionData.end_time)}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {SESSION_DESCRIPTIONS[selectedSessionData.session_type]}
+              </p>
 
               <div className="mt-4 border-t pt-4">
-                <p className="text-sm text-muted-foreground">
-                  Tutor
-                </p>
-
-                <p className="font-medium">
-                  {
-                    selectedTutorData?.name
-                  }
-                </p>
+                <p className="text-sm text-muted-foreground">Tutor</p>
+                <p className="font-medium">{selectedTutorData.name}</p>
               </div>
             </div>
 
             <div className="mt-5 flex flex-col gap-3 sm:flex-row">
               <Button
                 className="sm:min-w-48"
-                onClick={
-                  bookSession
-                }
+                onClick={() => void bookSession()}
                 disabled={booking}
               >
-                {booking
-                  ? 'Booking...'
-                  : 'Confirm Booking'}
+                {booking ? 'Booking...' : 'Confirm Booking'}
               </Button>
 
               <Button
                 variant="outline"
-                onClick={() =>
-                  setSelectedSession(
-                    null
-                  )
-                }
+                onClick={() => setSelectedSession(null)}
                 disabled={booking}
               >
                 Choose a Different Time
@@ -1603,55 +1263,15 @@ export default function BookPage() {
   )
 }
 
-function ProgressStep({
-  number,
-  title,
-  active,
-  complete,
-}: {
-  number: string
-  title: string
-  active: boolean
-  complete: boolean
-}) {
-  return (
-    <div
-      className={`rounded-xl border p-4 ${
-        active || complete
-          ? 'bg-white'
-          : 'bg-muted/30'
-      }`}
-    >
-      <div className="flex items-center gap-3">
-        <div
-          className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold ${
-            complete
-              ? 'bg-primary text-primary-foreground'
-              : active
-                ? 'border-2 border-primary'
-                : 'bg-muted'
-          }`}
-        >
-          {complete
-            ? '✓'
-            : number}
-        </div>
+/* -------------------------------------------------------------------------- */
+/* Helpers                                                                    */
+/* -------------------------------------------------------------------------- */
 
-        <p className="font-medium">
-          {title}
-        </p>
-      </div>
-    </div>
-  )
+function isCancelledBooking(status: string | null | undefined) {
+  const normalized = status?.toLowerCase().trim()
+  return normalized === 'cancelled' || normalized === 'canceled'
 }
 
-/*
- * A session can only be booked if its start time is at least
- * 24 hours in the future.
- *
- * Session dates/times are interpreted in the browser's local
- * timezone, matching the existing booking-page date/time logic.
- */
 function isSessionAtLeast24HoursAway(
   session: Pick<BookableSession, 'session_date' | 'start_time'>,
   referenceDate: Date = new Date()
@@ -1666,117 +1286,92 @@ function isSessionAtLeast24HoursAway(
   )
 }
 
-/*
- * Format 3:15 PM from a database time.
- */
+function compareSessions(a: BookableSession, b: BookableSession) {
+  const dateComparison = a.session_date.localeCompare(b.session_date)
 
-function formatTime(
-  time: string
-) {
-  const [
-    hours,
-    minutes,
-  ] = time.split(':')
+  if (dateComparison !== 0) return dateComparison
 
-  const date =
-    new Date()
-
-  date.setHours(
-    Number(hours),
-    Number(minutes),
-    0,
-    0
-  )
-
-  return date.toLocaleTimeString(
-    [],
-    {
-      hour: 'numeric',
-      minute: '2-digit',
-    }
-  )
+  return a.start_time.localeCompare(b.start_time)
 }
 
-/*
- * Format:
- * Thursday, September 3
- */
+function groupSessionsByDate(sessions: BookableSession[]) {
+  const groups = new Map<string, BookableSession[]>()
 
-function formatDate(
-  date: string
-) {
-  return new Date(
-    `${date}T00:00:00`
-  ).toLocaleDateString(
-    [],
-    {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-    }
-  )
+  for (const session of [...sessions].sort(compareSessions)) {
+    const current = groups.get(session.session_date) || []
+    current.push(session)
+    groups.set(session.session_date, current)
+  }
+
+  return Array.from(groups.entries()).map(([date, dateSessions]) => ({
+    date,
+    sessions: dateSessions,
+  }))
 }
 
-/*
- * Format:
- * Thu
- */
-
-function formatWeekday(
-  date: string
-) {
-  return new Date(
-    `${date}T00:00:00`
-  ).toLocaleDateString(
-    [],
-    {
-      weekday: 'short',
-    }
-  )
+function timeToMinutes(time: string) {
+  const [hours, minutes] = time.split(':').map(Number)
+  return hours * 60 + minutes
 }
 
-/*
- * Format:
- * Sep 3
- */
+function formatLocalDate(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
 
-function formatShortDate(
-  date: string
-) {
-  return new Date(
-    `${date}T00:00:00`
-  ).toLocaleDateString(
-    [],
-    {
-      month: 'short',
-      day: 'numeric',
-    }
-  )
+  return `${year}-${month}-${day}`
 }
 
-/*
- * Local YYYY-MM-DD.
- *
- * Do NOT use toISOString() here.
- */
+function formatTime(time: string) {
+  const [hours, minutes] = time.split(':').map(Number)
 
-function formatLocalDate(
-  date: Date
-) {
-  const year =
-    date.getFullYear()
+  const date = new Date()
+  date.setHours(hours, minutes, 0, 0)
 
-  const month =
-    String(
-      date.getMonth() + 1
-    ).padStart(2, '0')
+  return date.toLocaleTimeString([], {
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
 
-  const day =
-    String(
-      date.getDate()
-    ).padStart(2, '0')
+function formatDate(date: string) {
+  return new Date(`${date}T00:00:00`).toLocaleDateString([], {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
 
+function formatShortDate(date: string) {
+  return new Date(`${date}T00:00:00`).toLocaleDateString([], {
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
+function formatWeekdayLong(date: string) {
+  return new Date(`${date}T00:00:00`).toLocaleDateString([], {
+    weekday: 'long',
+  })
+}
+
+function SearchIcon() {
   return (
-    `${year}-${month}-${day}`
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.35-4.35" />
+    </svg>
   )
 }
