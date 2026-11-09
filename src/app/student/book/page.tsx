@@ -206,6 +206,12 @@ export default function BookPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
+  const [overlappingSession, setOverlappingSession] = useState<{
+    session_date: string
+    start_time: string
+    end_time: string
+  } | null>(null)
+  
   const subjectTypeOrder: Record<SubjectType, number> = {
     math: 1,
     english: 2,
@@ -653,7 +659,7 @@ export default function BookPage() {
     })
   }
 
-  async function bookSession() {
+  async function bookSession(confirmOverlap = false) {
     setError('')
     setSuccess('')
 
@@ -692,6 +698,49 @@ export default function BookPage() {
       if (userError || !user) {
         setError('You must be signed in to book a tutoring session.')
         return
+      }
+
+      // Check for overlapping sessions belonging to this student only.
+      // Only confirmed bookings should trigger this warning.
+      if (!confirmOverlap) {
+        const { data: studentBookings, error: studentBookingsError } =
+          await supabase
+            .from('bookings')
+            .select('session_id')
+            .eq('student_id', user.id)
+            .eq('status', 'confirmed')
+      
+        if (studentBookingsError) {
+          setError('Unable to check your existing sessions. Please try again.')
+          return
+        }
+      
+        const existingSessionIds = [
+          ...new Set((studentBookings || []).map((booking) => booking.session_id)),
+        ]
+      
+        if (existingSessionIds.length > 0) {
+          const { data: existingSessions, error: existingSessionsError } =
+            await supabase
+              .from('bookable_sessions')
+              .select('id, session_date, start_time, end_time')
+              .in('id', existingSessionIds)
+      
+          if (existingSessionsError) {
+            setError('Unable to check your existing sessions. Please try again.')
+            return
+          }
+      
+          const conflictingSession = (existingSessions || []).find(
+            (existingSession) =>
+              sessionsOverlap(selectedSessionData, existingSession)
+          )
+      
+          if (conflictingSession) {
+            setOverlappingSession(conflictingSession)
+            return
+          }
+        }
       }
 
       // Any booking row, regardless of status, means the session is occupied.
@@ -1449,6 +1498,113 @@ export default function BookPage() {
           </section>
         )}
       </div>
+      {overlappingSession && selectedSessionData && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="overlap-modal-title"
+            className="w-full max-w-md overflow-hidden rounded-2xl border bg-white shadow-2xl"
+          >
+            <div className="p-6 sm:p-7">
+              {/* Warning icon */}
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className="h-6 w-6"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 9v4m0 4h.01M10.3 3.9 2.6 17.5a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"
+                  />
+                </svg>
+              </div>
+
+              <h2
+                id="overlap-modal-title"
+                className="mt-5 text-xl font-semibold tracking-tight"
+              >
+                Overlapping session
+              </h2>
+
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                This student already has another tutoring session scheduled
+                during the time you've selected. Please make sure this is
+                intentional before continuing.
+              </p>
+
+              {/* Existing session */}
+              <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50/70 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+                  Existing session
+                </p>
+
+                <p className="mt-2 font-semibold text-foreground">
+                  {formatDate(overlappingSession.session_date)}
+                </p>
+
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {formatTime(overlappingSession.start_time)} –{' '}
+                  {formatTime(overlappingSession.end_time)}
+                </p>
+              </div>
+
+              {/* Session being booked */}
+              <div className="mt-3 rounded-xl border bg-muted/30 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  New session
+                </p>
+
+                <p className="mt-2 font-semibold">
+                  {formatDate(selectedSessionData.session_date)}
+                </p>
+
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {formatTime(selectedSessionData.start_time)} –{' '}
+                  {formatTime(selectedSessionData.end_time)}
+                </p>
+              </div>
+
+              <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
+                If you're booking for multiple children, double-check that
+                you've selected the correct student before proceeding.
+              </p>
+
+              {/* Actions */}
+              <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  variant="outline"
+                  className="sm:min-w-28"
+                  disabled={booking}
+                  onClick={() => setOverlappingSession(null)}
+                >
+                  Go back
+                </Button>
+
+                <Button
+                  className="sm:min-w-36"
+                  disabled={booking}
+                  onClick={() => {
+                    setOverlappingSession(null)
+                    void bookSession(true)
+                  }}
+                >
+                  {booking ? 'Booking...' : 'Book Anyway'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   )
 }
@@ -1499,6 +1655,29 @@ function compareSessions(a: BookableSession, b: BookableSession) {
 function timeToMinutes(time: string) {
   const [hours, minutes] = time.split(':').map(Number)
   return hours * 60 + minutes
+}
+
+function sessionsOverlap(
+  newSession: Pick<
+    BookableSession,
+    'session_date' | 'start_time' | 'end_time'
+  >,
+  existingSession: Pick<
+    BookableSession,
+    'session_date' | 'start_time' | 'end_time'
+  >
+) {
+  // Sessions on different dates cannot overlap.
+  if (newSession.session_date !== existingSession.session_date) {
+    return false
+  }
+
+  const newStart = timeToMinutes(newSession.start_time)
+  const newEnd = timeToMinutes(newSession.end_time)
+  const existingStart = timeToMinutes(existingSession.start_time)
+  const existingEnd = timeToMinutes(existingSession.end_time)
+
+  return newStart < existingEnd && newEnd > existingStart
 }
 
 function formatLocalDate(date: Date) {
