@@ -1574,11 +1574,6 @@ export default function BookPage() {
                 </p>
               </div>
 
-              <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
-                If you're booking for multiple children, double-check that
-                you've selected the correct student before proceeding.
-              </p>
-
               {/* Actions */}
               <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 <Button
