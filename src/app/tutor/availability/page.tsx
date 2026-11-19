@@ -25,6 +25,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
+import Link from 'next/link'
+
 type ScheduleWindow = {
   id: string
   name: string
@@ -548,6 +550,27 @@ export default function AvailabilityPage() {
             ))}
           </div>
         )}
+      </section>
+
+      {/* SPECIAL TUTORING OPPORTUNITIES */}
+      <section className="mt-8 rounded-xl border bg-green-100">
+        <div className="flex items-center justify-between border-b p-5">
+          <div>
+            <h2 className="font-semibold">
+              Special Tutoring Opportunities
+            </h2>
+          </div>
+
+          <Button className="bg-indigo-600 text-white hover:bg-indigo-700">
+            <Link href="/tutor/opportunities">
+              View Opportunities
+            </Link>
+          </Button>
+        </div>
+
+        <p className="p-5 text-sm text-muted-foreground">
+          Check out the available special tutoring opportunities and sign up for future notifications of any Scholar's Circle opportunities beyond regularly scheduled tutoring at your school.
+        </p>
       </section>
 
       {/* VIRTUAL DIALOG */}

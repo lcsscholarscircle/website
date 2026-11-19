@@ -54,6 +54,15 @@ if (error) {
 return ( <main className="flex min-h-screen items-center justify-center px-6"> <div className="w-full max-w-md text-center"> <h1 className="text-3xl font-bold">
 Scholar's Circle </h1>
 
+    <h2>
+      V3.1 -- Created by the{' '}
+      <a
+        href="/about"
+        className="underline underline-offset-4 hover:text-foreground transition-colors"
+      >
+        Scholar's Circle Team
+      </a>
+    </h2>
     <p className="mt-2 text-muted-foreground">
       A peer-to-peer tutoring network.
     </p>

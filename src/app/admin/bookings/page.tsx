@@ -67,6 +67,10 @@ export default function BookingsPage() {
   const [cancelling, setCancelling] = useState(false)
   const [restoring, setRestoring] = useState(false)
 
+  const [sessionLink, setSessionLink] = useState('')
+  const [loadingLink, setLoadingLink] = useState(false)
+  const [savingLink, setSavingLink] = useState(false)
+
   async function loadBookings() {
     setLoading(true)
 
@@ -127,6 +131,49 @@ export default function BookingsPage() {
     setBookings(sortedBookings)
     setLoading(false)
   }
+
+  useEffect(() => {
+    let active = true
+
+    async function loadSessionLink() {
+      if (!selectedBooking) {
+        setSessionLink('')
+        return
+      }
+
+      setLoadingLink(true)
+      setSessionLink('')
+
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('id, link')
+        .eq('session_id', selectedBooking.session_id)
+        .eq('notification_type', 'session_reminder')
+
+      if (!active) return
+
+      if (error) {
+        console.error('Error loading session link:', error)
+        alert(`Could not load session link: ${error.message}`)
+        setLoadingLink(false)
+        return
+      }
+
+      // Prefer an existing non-empty link.
+      const existingLink =
+        data?.find((notification) => notification.link?.trim())
+          ?.link ?? ''
+
+      setSessionLink(existingLink)
+      setLoadingLink(false)
+    }
+
+    loadSessionLink()
+
+    return () => {
+      active = false
+    }
+  }, [selectedBooking])
 
   useEffect(() => {
     loadBookings()
@@ -325,6 +372,70 @@ export default function BookingsPage() {
     setSelectedBooking(null)
 
     await loadBookings()
+  }
+
+  async function saveSessionLink() {
+    if (!selectedBooking) return
+
+    const newLink = sessionLink.trim()
+
+    setSavingLink(true)
+
+    try {
+      // Find the reminder records before updating so we can
+      // detect missing records and verify the update.
+      const { data: reminders, error: fetchError } =
+        await supabase
+          .from('notifications')
+          .select('id')
+          .eq('session_id', selectedBooking.session_id)
+          .eq('notification_type', 'session_reminder')
+
+      if (fetchError) {
+        throw fetchError
+      }
+
+      if (!reminders || reminders.length === 0) {
+        throw new Error(
+          'No session_reminder notifications were found for this session.'
+        )
+      }
+
+      const { data: updatedReminders, error: updateError } =
+        await supabase
+          .from('notifications')
+          .update({ link: newLink || null })
+          .eq('session_id', selectedBooking.session_id)
+          .eq('notification_type', 'session_reminder')
+          .select('id')
+
+      if (updateError) {
+        throw updateError
+      }
+
+      if (
+        !updatedReminders ||
+        updatedReminders.length !== reminders.length
+      ) {
+        throw new Error(
+          `Expected to update ${reminders.length} reminder(s), ` +
+          `but updated ${updatedReminders?.length ?? 0}. ` +
+          'Check your Supabase permissions and try again.'
+        )
+      }
+
+      alert('Session link saved successfully.')
+    } catch (error) {
+      console.error('Error saving session link:', error)
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'Could not save the session link.'
+      )
+    } finally {
+      setSavingLink(false)
+    }
   }
 
   if (loading) {
@@ -686,6 +797,63 @@ export default function BookingsPage() {
                     )}
                   </p>
                 </div>
+              </div>
+
+              {/* SESSION LINK */}
+              <div>
+                <p className="mb-2 text-sm font-semibold">
+                  Session Link
+                </p>
+
+                {loadingLink ? (
+                  <p className="text-sm text-muted-foreground">
+                    Loading session link...
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    <input
+                      type="url"
+                      value={sessionLink}
+                      onChange={(event) =>
+                        setSessionLink(event.target.value)
+                      }
+                      placeholder="https://..."
+                      disabled={savingLink}
+                      className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-ring"
+                    />
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        onClick={saveSessionLink}
+                        disabled={savingLink || loadingLink}
+                      >
+                        {savingLink ? 'Saving...' : 'Save Link'}
+                      </Button>
+
+                      {sessionLink.trim() && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() =>
+                            window.open(
+                              sessionLink,
+                              '_blank',
+                              'noopener,noreferrer'
+                            )
+                          }
+                          disabled={savingLink}
+                        >
+                          Open Link
+                        </Button>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-muted-foreground">
+                      Saving updates the session&apos;s reminder notifications.
+                      Leave the field empty and save to clear the existing link.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* NOTES */}
