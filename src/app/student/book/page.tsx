@@ -211,6 +211,9 @@ export default function BookPage() {
     start_time: string
     end_time: string
   } | null>(null)
+
+  const [pairingInformation, setPairingInformation] = useState('')
+  const [submittingPairingRequest, setSubmittingPairingRequest] = useState(false)
   
   const subjectTypeOrder: Record<SubjectType, number> = {
     math: 1,
@@ -846,6 +849,53 @@ export default function BookPage() {
     }
   }
 
+  async function submitPairingRequest() {
+    setError('')
+    setSuccess('')
+
+    if (!pairingInformation.trim()) {
+      setError('Please provide some information about the tutoring you need.')
+      return
+    }
+
+    setSubmittingPairingRequest(true)
+
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser()
+
+      if (userError || !user) {
+        setError('You must be signed in to submit a pairing request.')
+        return
+      }
+
+      const { error: requestError } = await supabase
+        .from('requests')
+        .insert({
+          requester: user.id,
+          type: 'pairing_request',
+          opportunity: null,
+          information: pairingInformation.trim(),
+        })
+
+      if (requestError) {
+        console.error('Pairing request submission failed:', requestError)
+        setError('Unable to submit your request. Please try again.')
+        return
+      }
+
+      setPairingInformation('')
+      setSuccess('Your tutor pairing request has been submitted! A leader will review it.')
+    } catch (err) {
+      console.error('Pairing request error:', err)
+      setError('An unexpected error occurred. Please try again.')
+    } finally {
+      setSubmittingPairingRequest(false)
+    }
+  }
+
   if (loading) {
     return (
       <DashboardLayout role="student">
@@ -1454,6 +1504,62 @@ export default function BookPage() {
               })}
             </div>
           )}
+        </section>
+
+        {/* Tutor pairing request */}
+        <section className="overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-sm">
+          <div className="border-b border-blue-100 bg-blue-50/40 p-5 sm:p-6">
+            <h2 className="text-lg font-semibold">Can't find a tutor?</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Submit a pairing request and our team will try to connect you with a tutor
+              who meets your needs.
+            </p>
+          </div>
+
+          <div className="space-y-4 p-5 sm:p-6">
+            <div>
+              <label
+                htmlFor="pairing-information"
+                className="mb-2 block text-sm font-medium"
+              >
+                Tell us what you're looking for
+              </label>
+
+              <textarea
+                id="pairing-information"
+                value={pairingInformation}
+                onChange={(event) => setPairingInformation(event.target.value)}
+                placeholder={`Please include as much detail as possible:
+
+        • Subject: What subject or specific topic do you need help with?
+        • Available times: What days and times work for you?
+        • Location: Would you prefer LFP, the library, or virtual tutoring?
+        • Additional information: Is there anything else we should know?`}
+                rows={7}
+                maxLength={3000}
+                className="w-full rounded-xl border bg-background p-3 text-sm leading-relaxed outline-none transition placeholder:text-muted-foreground/70 focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              />
+
+              <div className="mt-2 flex justify-between gap-3 text-xs text-muted-foreground">
+                <span>Please include your subject and availability.</span>
+                <span>{pairingInformation.length}/3000</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-muted-foreground">
+                A Scholar's Circle leader will review your request.
+              </p>
+
+              <Button
+                onClick={() => void submitPairingRequest()}
+                disabled={submittingPairingRequest || !pairingInformation.trim()}
+                className="sm:min-w-40"
+              >
+                {submittingPairingRequest ? 'Submitting...' : 'Submit Pairing Request'}
+              </Button>
+            </div>
+          </div>
         </section>
 
         {/* Confirmation */}

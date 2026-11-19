@@ -17,6 +17,7 @@ export default function Sidebar({ role }: SidebarProps) {
     tutor: [
       { name: 'Dashboard', href: '/tutor' },
       { name: 'Availability', href: '/tutor/availability' },
+      { name: 'Opportunities', href: '/tutor/opportunities' },
       { name: 'Student Dashboard', href: '/student' },
     ],
 
