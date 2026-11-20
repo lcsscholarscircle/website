@@ -17,6 +17,9 @@ export default function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname()
 
+  // Normalize pathname to avoid trailing-slash issues
+  const currentPath = pathname.replace(/\/$/, '') || '/'
+
   const links = {
     student: [
       { name: 'Dashboard', href: '/student', icon: '⌂' },
@@ -28,7 +31,7 @@ export default function Sidebar({
       { name: 'Dashboard', href: '/tutor', icon: '⌂' },
       { name: 'Availability', href: '/tutor/availability', icon: '◷' },
       { name: 'Opportunities', href: '/tutor/opportunities', icon: '☆' },
-      { name: 'Student Dashboard', href: '/student', icon: '♧' },
+      { name: 'Student Dashboard', href: '/student', icon: '♙' },
     ],
 
     leader: [
@@ -47,65 +50,48 @@ export default function Sidebar({
         collapsed ? 'w-[72px]' : 'w-64'
       }`}
     >
-      {/* Header */}
-      <div className="mb-6 shrink-0 overflow-hidden">
-        <div className="flex items-center justify-between gap-2">
-          {!collapsed && (
+      {/* Header / Home Link */}
+      <Link
+        href="/"
+        title="Scholar's Circle Home"
+        className="mb-6 flex min-h-[52px] shrink-0 items-center justify-center overflow-hidden rounded-lg transition-colors hover:bg-gray-50"
+      >
+        {collapsed ? (
+          <span className="text-xl font-bold text-green-700">
+            SC
+          </span>
+        ) : (
+          <div className="w-full">
             <h1 className="whitespace-nowrap text-xl font-bold">
               Scholar&apos;s Circle
             </h1>
-          )}
 
-          {collapsed && (
-            <span className="mx-auto text-xl font-bold text-green-700">
-              SC
-            </span>
-          )}
-        </div>
-
-        {!collapsed && (
-          <p className="mt-1 text-sm text-muted-foreground whitespace-nowrap">
-            Peer Tutoring Organization
-          </p>
+            <p className="mt-1 whitespace-nowrap text-sm text-muted-foreground">
+              Peer Tutoring Organization
+            </p>
+          </div>
         )}
-      </div>
-
-      {/* Collapse Button */}
-      <button
-        onClick={onToggle}
-        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        className="mb-6 flex h-10 w-full shrink-0 items-center justify-center rounded-lg border bg-white text-gray-600 transition-colors hover:bg-gray-100"
-      >
-        <span className="text-lg">
-          {collapsed ? '→' : '←'}
-        </span>
-
-        {!collapsed && (
-          <span className="ml-2 text-sm">Collapse</span>
-        )}
-      </button>
+      </Link>
 
       {/* Navigation */}
       <nav className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden">
         {links[role].map((link) => {
-          const active =
-            pathname === link.href ||
-            (link.href !== `/${role}` &&
-              pathname.startsWith(link.href + '/'))
+          // Only highlight the exact current page
+          const active = currentPath === link.href
 
           return (
             <Link
               key={link.href}
               href={link.href}
               title={collapsed ? link.name : undefined}
+              aria-current={active ? 'page' : undefined}
               className={`flex items-center rounded-lg py-2 text-sm transition-colors ${
                 collapsed
                   ? 'justify-center px-1'
                   : 'gap-3 px-3'
               } ${
                 active
-                  ? 'bg-green-50 text-green-800 font-semibold'
+                  ? 'bg-green-50 font-semibold text-green-800'
                   : 'text-gray-700 hover:bg-gray-100'
               }`}
             >
@@ -130,7 +116,7 @@ export default function Sidebar({
         <Link
           href="/about"
           title={collapsed ? 'About Us' : undefined}
-          className={`flex items-center rounded-xl border border-green-200 bg-green-50 text-green-800 shadow-sm transition-all hover:bg-green-100 hover:border-green-300 hover:shadow-md ${
+          className={`flex items-center rounded-xl border border-green-200 bg-green-50 text-green-800 shadow-sm transition-all hover:border-green-300 hover:bg-green-100 hover:shadow-md ${
             collapsed
               ? 'justify-center p-2'
               : 'gap-3 px-3 py-3'
@@ -143,7 +129,7 @@ export default function Sidebar({
               <p className="text-sm font-semibold">
                 About Us
               </p>
-              <p className="text-[11px] text-green-700 whitespace-nowrap">
+              <p className="whitespace-nowrap text-[11px] text-green-700">
                 Meet the Scholar&apos;s Circle team
               </p>
             </div>
@@ -161,6 +147,24 @@ export default function Sidebar({
             </p>
           </div>
         )}
+
+        {/* Collapse / Expand Button */}
+        <button
+          onClick={onToggle}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          className="flex h-10 w-full items-center justify-center rounded-lg border bg-white text-gray-600 transition-colors hover:bg-gray-100"
+        >
+          <span className="text-lg">
+            {collapsed ? '→' : '←'}
+          </span>
+
+          {!collapsed && (
+            <span className="ml-2 text-sm">
+              Collapse Sidebar
+            </span>
+          )}
+        </button>
 
       </div>
     </aside>
