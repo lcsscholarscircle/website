@@ -760,7 +760,7 @@ export default function BookingsPage() {
           }
         }}
       >
-        <DialogContent className="flex max-h-[90dvh] w-[calc(100%-1rem)] max-w-lg flex-col gap-0 overflow-hidden p-0 sm:w-full">
+        <DialogContent className="flex max-h-[90dvh] w-[calc(100%-1rem)] max-w-[800px] max-h-[90dvh] flex-col gap-0 overflow-hidden p-0 sm:w-[calc(100%-2rem)] sm:max-h-[85dvh]">
 
           {/* FIXED HEADER */}
 
@@ -777,8 +777,8 @@ export default function BookingsPage() {
           {/* SCROLLABLE CONTENT */}
 
           {selectedBooking && (
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 sm:px-6">
-              <div className="space-y-5 py-5">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6 lg:px-8">
+              <div className="space-y-6 py-5 sm:py-6">
 
                 {/* STATUS */}
 
@@ -800,7 +800,7 @@ export default function BookingsPage() {
 
                 {/* STUDENT AND TUTOR */}
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
 
                   {/* STUDENT */}
 
