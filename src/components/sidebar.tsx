@@ -33,8 +33,10 @@ export default function Sidebar({ role }: SidebarProps) {
   }
 
   return (
-    <aside className="w-64 border-r bg-white min-h-screen p-6 flex flex-col">
-      <div className="mb-8">
+    <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r bg-white p-6">
+
+      {/* Header */}
+      <div className="mb-8 shrink-0">
         <h1 className="text-xl font-bold">
           Scholar&apos;s Circle
         </h1>
@@ -44,7 +46,8 @@ export default function Sidebar({ role }: SidebarProps) {
         </p>
       </div>
 
-      <nav className="space-y-2">
+      {/* Navigation */}
+      <nav className="min-h-0 flex-1 space-y-2 overflow-y-auto">
         {links[role].map((link) => (
           <Link
             key={link.href}
@@ -57,7 +60,7 @@ export default function Sidebar({ role }: SidebarProps) {
       </nav>
 
       {/* Bottom Section */}
-      <div className="mt-auto pt-6 space-y-5">
+      <div className="mt-auto shrink-0 pt-6 space-y-5">
 
         {/* About Button */}
         <Link
@@ -69,7 +72,7 @@ export default function Sidebar({ role }: SidebarProps) {
               About Us
             </p>
             <p className="text-[11px] text-green-700 dark:text-green-400">
-              Meet the Scholar's Circle team
+              Meet the Scholar&apos;s Circle team
             </p>
           </div>
         </Link>
