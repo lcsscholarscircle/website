@@ -2,90 +2,165 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 
 type SidebarProps = {
   role: 'student' | 'tutor' | 'leader'
+  collapsed: boolean
+  onToggle: () => void
 }
 
-export default function Sidebar({ role }: SidebarProps) {
+export default function Sidebar({
+  role,
+  collapsed,
+  onToggle,
+}: SidebarProps) {
+  const pathname = usePathname()
+
   const links = {
     student: [
-      { name: 'Dashboard', href: '/student' },
-      { name: 'Book a Tutor', href: '/student/book' },
-      { name: 'My Sessions', href: '/student/sessions' },
+      { name: 'Dashboard', href: '/student', icon: '⌂' },
+      { name: 'Book a Tutor', href: '/student/book', icon: '+' },
+      { name: 'My Sessions', href: '/student/sessions', icon: '▤' },
     ],
 
     tutor: [
-      { name: 'Dashboard', href: '/tutor' },
-      { name: 'Availability', href: '/tutor/availability' },
-      { name: 'Opportunities', href: '/tutor/opportunities' },
-      { name: 'Student Dashboard', href: '/student' },
+      { name: 'Dashboard', href: '/tutor', icon: '⌂' },
+      { name: 'Availability', href: '/tutor/availability', icon: '◷' },
+      { name: 'Opportunities', href: '/tutor/opportunities', icon: '☆' },
+      { name: 'Student Dashboard', href: '/student', icon: '♧' },
     ],
 
     leader: [
-      { name: 'Dashboard', href: '/admin' },
-      { name: 'Schedule', href: '/admin/schedule' },
-      { name: 'Bookings', href: '/admin/bookings' },
-      { name: 'Requests', href: '/admin/requests' },
-      { name: 'Tutor Dashboard', href: '/tutor' },
-      { name: 'Student Dashboard', href: '/student' },
+      { name: 'Dashboard', href: '/admin', icon: '⌂' },
+      { name: 'Schedule', href: '/admin/schedule', icon: '▦' },
+      { name: 'Bookings', href: '/admin/bookings', icon: '▤' },
+      { name: 'Requests', href: '/admin/requests', icon: '✉' },
+      { name: 'Tutor Dashboard', href: '/tutor', icon: '♙' },
+      { name: 'Student Dashboard', href: '/student', icon: '♧' },
     ],
   }
 
   return (
-    <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r bg-white p-6">
-
+    <aside
+      className={`fixed left-0 top-0 z-40 flex h-screen flex-col border-r bg-white p-4 transition-[width] duration-300 ease-in-out ${
+        collapsed ? 'w-[72px]' : 'w-64'
+      }`}
+    >
       {/* Header */}
-      <div className="mb-8 shrink-0">
-        <h1 className="text-xl font-bold">
-          Scholar&apos;s Circle
-        </h1>
+      <div className="mb-6 shrink-0 overflow-hidden">
+        <div className="flex items-center justify-between gap-2">
+          {!collapsed && (
+            <h1 className="whitespace-nowrap text-xl font-bold">
+              Scholar&apos;s Circle
+            </h1>
+          )}
 
-        <p className="text-sm text-muted-foreground">
-          Peer Tutoring Organization
-        </p>
+          {collapsed && (
+            <span className="mx-auto text-xl font-bold text-green-700">
+              SC
+            </span>
+          )}
+        </div>
+
+        {!collapsed && (
+          <p className="mt-1 text-sm text-muted-foreground whitespace-nowrap">
+            Peer Tutoring Organization
+          </p>
+        )}
       </div>
 
+      {/* Collapse Button */}
+      <button
+        onClick={onToggle}
+        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        className="mb-6 flex h-10 w-full shrink-0 items-center justify-center rounded-lg border bg-white text-gray-600 transition-colors hover:bg-gray-100"
+      >
+        <span className="text-lg">
+          {collapsed ? '→' : '←'}
+        </span>
+
+        {!collapsed && (
+          <span className="ml-2 text-sm">Collapse</span>
+        )}
+      </button>
+
       {/* Navigation */}
-      <nav className="min-h-0 flex-1 space-y-2 overflow-y-auto">
-        {links[role].map((link) => (
-          <Link
-            key={link.href}
-            href={link.href}
-            className="block rounded-lg px-3 py-2 text-sm hover:bg-gray-100 transition-colors"
-          >
-            {link.name}
-          </Link>
-        ))}
+      <nav className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden">
+        {links[role].map((link) => {
+          const active =
+            pathname === link.href ||
+            (link.href !== `/${role}` &&
+              pathname.startsWith(link.href + '/'))
+
+          return (
+            <Link
+              key={link.href}
+              href={link.href}
+              title={collapsed ? link.name : undefined}
+              className={`flex items-center rounded-lg py-2 text-sm transition-colors ${
+                collapsed
+                  ? 'justify-center px-1'
+                  : 'gap-3 px-3'
+              } ${
+                active
+                  ? 'bg-green-50 text-green-800 font-semibold'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center text-lg">
+                {link.icon}
+              </span>
+
+              {!collapsed && (
+                <span className="whitespace-nowrap">
+                  {link.name}
+                </span>
+              )}
+            </Link>
+          )
+        })}
       </nav>
 
       {/* Bottom Section */}
-      <div className="mt-auto shrink-0 pt-6 space-y-5">
+      <div className="mt-auto shrink-0 space-y-4 border-t pt-5">
 
         {/* About Button */}
         <Link
           href="/about"
-          className="flex items-center gap-3 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-green-800 shadow-sm transition-all hover:bg-green-100 hover:border-green-300 hover:shadow-md dark:border-green-900 dark:bg-green-950/40 dark:text-green-300 dark:hover:bg-green-950/70"
+          title={collapsed ? 'About Us' : undefined}
+          className={`flex items-center rounded-xl border border-green-200 bg-green-50 text-green-800 shadow-sm transition-all hover:bg-green-100 hover:border-green-300 hover:shadow-md ${
+            collapsed
+              ? 'justify-center p-2'
+              : 'gap-3 px-3 py-3'
+          }`}
         >
-          <div>
-            <p className="text-sm font-semibold">
-              About Us
-            </p>
-            <p className="text-[11px] text-green-700 dark:text-green-400">
-              Meet the Scholar&apos;s Circle team
-            </p>
-          </div>
+          <span className="shrink-0 text-lg">ⓘ</span>
+
+          {!collapsed && (
+            <div className="min-w-0">
+              <p className="text-sm font-semibold">
+                About Us
+              </p>
+              <p className="text-[11px] text-green-700 whitespace-nowrap">
+                Meet the Scholar&apos;s Circle team
+              </p>
+            </div>
+          )}
         </Link>
 
         {/* Contact */}
-        <div className="px-3 text-sm">
-          <p className="text-muted-foreground">
-            Contact us at:
-          </p>
-          <p className="text-[11px] font-medium whitespace-nowrap">
-            scholarscircle@larchmontcharter.org
-          </p>
-        </div>
+        {!collapsed && (
+          <div className="px-2 text-sm">
+            <p className="text-muted-foreground">
+              Contact us at:
+            </p>
+            <p className="break-all text-[11px] font-medium">
+              scholarscircle@larchmontcharter.org
+            </p>
+          </div>
+        )}
 
       </div>
     </aside>
