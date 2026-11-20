@@ -55,7 +55,7 @@ return ( <main className="flex min-h-screen items-center justify-center px-6"> <
 Scholar's Circle </h1>
 
     <h2>
-      V3.2 -- Created by the{' '}
+      V3.3 -- Created by the{' '}
       <a
         href="/about"
         className="underline underline-offset-4 hover:text-foreground transition-colors"
